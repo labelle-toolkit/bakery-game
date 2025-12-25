@@ -9,7 +9,10 @@ const items = @import("../components/items.zig");
 
 const HookPayload = tasks.hooks.HookPayload(u32, items.ItemType);
 
-// Global state for visual feedback (in a real game, use ECS components)
+// Import movement script for pathfinding control
+const movement = @import("../scripts/movement.zig");
+
+// Global state for visual feedback
 pub var last_event: []const u8 = "Waiting for activity...";
 pub var pickup_count: u32 = 0;
 pub var process_count: u32 = 0;
@@ -21,21 +24,23 @@ pub fn pickup_started(payload: HookPayload) void {
     const info = payload.pickup_started;
     pickup_count += 1;
     last_event = "Baker walking to pantry...";
-    std.log.info("[BAKERY] Pickup started: baker={d} -> pantry={d}", .{
-        info.worker_id,
-        info.eis_id,
-    });
+
+    // Move baker to pantry
+    movement.sendToStation(info.worker_id, movement.Stations.pantry);
+
+    std.log.info("[BAKERY] Pickup started: baker={d} -> pantry", .{info.worker_id});
 }
 
 /// Called when a worker starts processing at the workstation
 pub fn process_started(payload: HookPayload) void {
     const info = payload.process_started;
     process_count += 1;
-    last_event = "Baker kneading dough...";
-    std.log.info("[BAKERY] Processing: baker={d} at oven={d}", .{
-        info.worker_id,
-        info.workstation_id,
-    });
+    last_event = "Baker walking to oven...";
+
+    // Move baker to oven
+    movement.sendToStation(info.worker_id, movement.Stations.oven);
+
+    std.log.info("[BAKERY] Processing: baker={d} -> oven", .{info.worker_id});
 }
 
 /// Called when a worker starts storing the output
@@ -43,18 +48,23 @@ pub fn store_started(payload: HookPayload) void {
     const info = payload.store_started;
     store_count += 1;
     last_event = "Baker carrying bread to shelf...";
-    std.log.info("[BAKERY] Storing: baker={d} -> shelf={d}", .{
-        info.worker_id,
-        info.eos_id,
-    });
+
+    // Move baker to shelf
+    movement.sendToStation(info.worker_id, movement.Stations.shelf);
+
+    std.log.info("[BAKERY] Storing: baker={d} -> shelf", .{info.worker_id});
 }
 
 /// Called when a worker completes a task and is released
 pub fn worker_released(payload: HookPayload) void {
     const info = payload.worker_released;
     bread_produced += 1;
-    last_event = "Fresh bread ready!";
-    std.log.info("[BAKERY] Cycle complete! baker={d}, total bread={d}", .{
+    last_event = "Fresh bread ready! Baker returning to counter...";
+
+    // Move baker back to counter
+    movement.sendToStation(info.worker_id, movement.Stations.counter);
+
+    std.log.info("[BAKERY] Cycle complete! baker={d} -> counter, total bread={d}", .{
         info.worker_id,
         bread_produced,
     });
