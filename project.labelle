@@ -17,7 +17,7 @@
             .name = "labelle-tasks",
             .branch = "main",
             .id_type = "u32",
-            .item_type = "main_module.ItemType",
+            .item_type = "main_module.Items",
         },
         .{
             .name = "labelle-pathfinding",

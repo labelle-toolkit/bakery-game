@@ -1,0 +1,10 @@
+.{
+    .components = .{
+        .Position = .{ .x = 200, .y = 450 },
+        .Shape = .{
+            .type = .circle,
+            .radius = 20,
+            .color = .{ .r = 255, .g = 200, .b = 150, .a = 255 },
+        },
+    },
+}

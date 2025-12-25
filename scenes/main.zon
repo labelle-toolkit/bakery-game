@@ -2,7 +2,7 @@
     .name = "main",
     .scripts = .{"movement"},
     .entities = .{
-        // Counter station marker
+        // Counter
         .{
             .components = .{
                 .Position = .{ .x = 200, .y = 450 },
@@ -10,18 +10,11 @@
                     .type = .rectangle,
                     .width = 80,
                     .height = 40,
-                    .color = .{ .r = 139, .g = 90, .b = 43 },
+                    .color = .{ .r = 139, .g = 90, .b = 43, .a = 255 },
                 },
             },
         },
-        // Counter label
-        .{
-            .components = .{
-                .Position = .{ .x = 200, .y = 500 },
-                .Text = .{ .content = "Counter", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200 } },
-            },
-        },
-        // Pantry station marker
+        // Pantry
         .{
             .components = .{
                 .Position = .{ .x = 200, .y = 150 },
@@ -29,18 +22,11 @@
                     .type = .rectangle,
                     .width = 80,
                     .height = 60,
-                    .color = .{ .r = 100, .g = 140, .b = 80 },
+                    .color = .{ .r = 100, .g = 140, .b = 80, .a = 255 },
                 },
             },
         },
-        // Pantry label
-        .{
-            .components = .{
-                .Position = .{ .x = 200, .y = 220 },
-                .Text = .{ .content = "Pantry", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200 } },
-            },
-        },
-        // Oven station marker
+        // Oven
         .{
             .components = .{
                 .Position = .{ .x = 600, .y = 150 },
@@ -48,18 +34,11 @@
                     .type = .rectangle,
                     .width = 80,
                     .height = 60,
-                    .color = .{ .r = 200, .g = 80, .b = 50 },
+                    .color = .{ .r = 200, .g = 80, .b = 50, .a = 255 },
                 },
             },
         },
-        // Oven label
-        .{
-            .components = .{
-                .Position = .{ .x = 600, .y = 220 },
-                .Text = .{ .content = "Oven", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200 } },
-            },
-        },
-        // Shelf station marker
+        // Shelf
         .{
             .components = .{
                 .Position = .{ .x = 600, .y = 450 },
@@ -67,22 +46,39 @@
                     .type = .rectangle,
                     .width = 80,
                     .height = 40,
-                    .color = .{ .r = 160, .g = 120, .b = 80 },
+                    .color = .{ .r = 160, .g = 120, .b = 80, .a = 255 },
                 },
             },
         },
-        // Shelf label
+        // Labels
+        .{
+            .components = .{
+                .Position = .{ .x = 200, .y = 500 },
+                .Text = .{ .content = "Counter", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 200, .y = 220 },
+                .Text = .{ .content = "Pantry (EIS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 600, .y = 220 },
+                .Text = .{ .content = "Oven", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+            },
+        },
         .{
             .components = .{
                 .Position = .{ .x = 600, .y = 500 },
-                .Text = .{ .content = "Shelf", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200 } },
+                .Text = .{ .content = "Shelf (EOS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
-        // Status display
         .{
             .components = .{
                 .Position = .{ .x = 400, .y = 650 },
-                .Text = .{ .content = "Press SPACE to move baker!", .size = 20, .color = .{ .r = 255, .g = 255, .b = 255 } },
+                .Text = .{ .content = "Bakery - EIS/IIS/IOS/EOS Task Engine", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
             },
         },
     },

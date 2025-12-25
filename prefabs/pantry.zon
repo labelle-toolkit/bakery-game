@@ -1,0 +1,11 @@
+.{
+    .components = .{
+        .Position = .{ .x = 200, .y = 150 },
+        .Shape = .{
+            .type = .rectangle,
+            .width = 80,
+            .height = 60,
+            .color = .{ .r = 100, .g = 140, .b = 80, .a = 255 },
+        },
+    },
+}
