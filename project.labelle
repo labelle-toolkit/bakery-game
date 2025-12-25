@@ -19,5 +19,9 @@
             .id_type = "u32",
             .item_type = "main_module.ItemType",
         },
+        .{
+            .name = "labelle-pathfinding",
+            .version = "2.7.0",
+        },
     },
 }
