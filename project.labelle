@@ -1,0 +1,23 @@
+.{
+    .version = 1,
+    .name = "bakery-game",
+    .description = "A bakery simulation demonstrating labelle-tasks plugin hooks",
+    .initial_scene = "main",
+    .backend = .raylib,
+    .ecs_backend = .zig_ecs,
+    .window = .{
+        .width = 1024,
+        .height = 768,
+        .title = "Bakery Game - Task Hooks Demo",
+        .target_fps = 60,
+    },
+    .resources = .{},
+    .plugins = .{
+        .{
+            .name = "labelle-tasks",
+            .branch = "main",
+            .id_type = "u32",
+            .item_type = "main_module.ItemType",
+        },
+    },
+}
