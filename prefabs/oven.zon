@@ -1,13 +1,27 @@
 // Oven workstation prefab
 // Converts 2 Flour into 1 Bread
-// Storage entities are linked at runtime via scene setup
 .{
     .components = .{
         .Position = .{ .x = 0, .y = 0 },
-        // Workstation component - storages are Entity.invalid by default
-        // and linked at runtime when the scene loads storage entities
-        .OvenWorkstation = .{},
-        // Binding with configuration
+        .OvenWorkstation = .{
+            .eis = .{
+                .{ .components = .{
+                    .Position = .{ .x = -60, .y = 0 },
+                } },
+            },
+            .iis = .{
+                .{ .components = .{} },
+                .{ .components = .{} },
+            },
+            .ios = .{
+                .{ .components = .{} },
+            },
+            .eos = .{
+                .{ .components = .{
+                    .Position = .{ .x = 60, .y = 0 },
+                } },
+            },
+        },
         .TaskWorkstationBinding = .{ .process_duration = 120 },
     },
 }
