@@ -2,13 +2,7 @@
 .{
     .components = .{
         .Position = .{ .x = 0, .y = 0 },
-        .Shape = .{
-            .shape = .rectangle,
-            .width = 80,
-            .height = 40,
-            .color = .{ .r = 160, .g = 120, .b = 80, .a = 255 },
-        },
-        .TaskStorage = .{ .priority = .Normal, .capacity = 10 },
+        .TaskStorage = .{ .capacity = 10 },
         .TaskStorageRole = .{ .role = .eos },
     },
 }

@@ -1,41 +1,13 @@
 // Oven workstation prefab
 // Converts 2 Flour into 1 Bread
+// Storage entities are linked at runtime via scene setup
 .{
     .components = .{
         .Position = .{ .x = 0, .y = 0 },
-        .Shape = .{
-            .shape = .rectangle,
-            .width = 80,
-            .height = 60,
-            .color = .{ .r = 200, .g = 80, .b = 50, .a = 255 },
-        },
-        // Workstation with inline storage definitions
-        .OvenWorkstation = .{
-            .eis = .{
-                .{ .components = .{
-                    .TaskStorage = .{ .priority = .High },
-                    .TaskStorageRole = .{ .role = .eis },
-                    .Position = .{ .x = -50, .y = 0 },
-                    .Shape = .{ .shape = .circle, .radius = 15, .color = .{ .r = 100, .g = 140, .b = 80, .a = 255 } },
-                } },
-            },
-            .iis = .{
-                .{ .components = .{ .TaskStorage = .{}, .TaskStorageRole = .{ .role = .iis } } },
-                .{ .components = .{ .TaskStorage = .{}, .TaskStorageRole = .{ .role = .iis } } },
-            },
-            .ios = .{
-                .{ .components = .{ .TaskStorage = .{}, .TaskStorageRole = .{ .role = .ios } } },
-            },
-            .eos = .{
-                .{ .components = .{
-                    .TaskStorage = .{ .priority = .High },
-                    .TaskStorageRole = .{ .role = .eos },
-                    .Position = .{ .x = 50, .y = 0 },
-                    .Shape = .{ .shape = .circle, .radius = 15, .color = .{ .r = 160, .g = 120, .b = 80, .a = 255 } },
-                } },
-            },
-        },
+        // Workstation component - storages are Entity.invalid by default
+        // and linked at runtime when the scene loads storage entities
+        .OvenWorkstation = .{},
         // Binding with configuration
-        .TaskWorkstationBinding = .{ .process_duration = 120, .priority = .High },
+        .TaskWorkstationBinding = .{ .process_duration = 120 },
     },
 }

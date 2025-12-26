@@ -1,24 +1,14 @@
-// Movement script - demonstrates comptime workstation integration
+// Movement script - camera controls and scene interaction
 //
-// This script shows how workstation components work with the ECS.
-// The prefab loader creates workstation entities with their inline storages.
+// Provides WASD camera movement for the bakery demo.
 
 const std = @import("std");
 const engine = @import("labelle-engine");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
-const Position = engine.Position;
-
-// Import game components
-const storage = @import("../components/storage.zig");
-const OvenWorkstation = storage.OvenWorkstation;
-const TaskWorkstationBinding = storage.TaskWorkstationBinding;
-const TaskStorage = storage.TaskStorage;
 
 var initialized: bool = false;
-var workstation_count: u32 = 0;
-var storage_count: u32 = 0;
 
 pub fn init(game: *Game, scene: *Scene) void {
     _ = game;
@@ -49,6 +39,4 @@ pub fn deinit(game: *Game, scene: *Scene) void {
     _ = game;
     _ = scene;
     initialized = false;
-    workstation_count = 0;
-    storage_count = 0;
 }
