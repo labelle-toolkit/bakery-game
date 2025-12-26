@@ -23,8 +23,43 @@ const ItemType = items.ItemType;
 // Pathfinding engine
 const PFEngine = pathfinding.PathfindingEngineSimple(u32, void);
 
-// Task engine (basic, without hooks dispatcher for simplicity)
-const TaskEngine = tasks.Engine(u32, ItemType);
+// Task hooks for game integration
+const TaskHooks = struct {
+    pub fn pickup_started(payload: tasks.hooks.HookPayload(u32, ItemType)) void {
+        const info = payload.pickup_started;
+        std.log.info("[HOOK] pickup_started: worker {d} -> pantry (EIS)", .{info.worker_id});
+        sendToStation(info.worker_id, Stations.pantry);
+    }
+
+    pub fn process_started(payload: tasks.hooks.HookPayload(u32, ItemType)) void {
+        const info = payload.process_started;
+        std.log.info("[HOOK] process_started: worker {d} -> oven", .{info.worker_id});
+        sendToStation(info.worker_id, Stations.oven);
+    }
+
+    pub fn store_started(payload: tasks.hooks.HookPayload(u32, ItemType)) void {
+        const info = payload.store_started;
+        std.log.info("[HOOK] store_started: worker {d} -> shelf (EOS)", .{info.worker_id});
+        sendToStation(info.worker_id, Stations.shelf);
+    }
+
+    pub fn worker_released(payload: tasks.hooks.HookPayload(u32, ItemType)) void {
+        const info = payload.worker_released;
+        std.log.info("[HOOK] worker_released: worker {d} -> counter", .{info.worker_id});
+        sendToStation(info.worker_id, Stations.counter);
+
+        // Update bread visuals
+        if (task_engine) |*te| {
+            const bread = te.getStorageQuantity(Stations.eos_bread, .Bread);
+            if (game_ptr) |game| {
+                updateBreadVisuals(game, bread);
+            }
+        }
+    }
+};
+
+// Task engine with hooks dispatcher
+const TaskEngine = tasks.EngineWithHooks(u32, ItemType, TaskHooks);
 
 // Station/Storage IDs
 pub const Stations = struct {
@@ -34,11 +69,20 @@ pub const Stations = struct {
     pub const oven: u32 = 2; // Workstation location
     pub const shelf: u32 = 3; // EOS location
 
-    // Task engine storage IDs
-    pub const eis: u32 = 100; // External Input Storage (pantry)
-    pub const iis: u32 = 101; // Internal Input Storage (oven input)
-    pub const ios: u32 = 102; // Internal Output Storage (oven output)
-    pub const eos: u32 = 103; // External Output Storage (shelf)
+    // Task engine storage IDs (single-item model: one storage per item type)
+    // EIS - External Input Storages (pantry ingredients)
+    pub const eis_flour: u32 = 100;
+    pub const eis_water: u32 = 101;
+    pub const eis_yeast: u32 = 102;
+    // IIS - Internal Input Storages (recipe requirements)
+    pub const iis_flour: u32 = 110;
+    pub const iis_water: u32 = 111;
+    pub const iis_yeast: u32 = 112;
+    // IOS - Internal Output Storage (oven output)
+    pub const ios_bread: u32 = 120;
+    // EOS - External Output Storage (shelf)
+    pub const eos_bread: u32 = 130;
+
     pub const workstation: u32 = 200;
     pub const worker: u32 = 1;
 };
@@ -77,52 +121,38 @@ pub fn init(game: *Game, scene: *Scene) void {
     task_engine = TaskEngine.init(game.allocator);
     var te = &task_engine.?;
 
-    // === STORAGE SETUP ===
+    // === STORAGE SETUP (single-item model) ===
 
-    // EIS - External Input Storage (Pantry) - holds raw ingredients
-    _ = te.addStorage(Stations.eis, .{ .slots = &.{
-        .{ .item = .Flour, .capacity = 10 },
-        .{ .item = .Water, .capacity = 10 },
-        .{ .item = .Yeast, .capacity = 10 },
-    } });
-    // Stock the pantry
-    _ = te.addToStorage(Stations.eis, .Flour, 5);
-    _ = te.addToStorage(Stations.eis, .Water, 5);
-    _ = te.addToStorage(Stations.eis, .Yeast, 5);
+    // EIS - External Input Storages (Pantry) - one storage per ingredient type
+    _ = te.addStorage(Stations.eis_flour, .{ .item = .Flour });
+    _ = te.addStorage(Stations.eis_water, .{ .item = .Water });
+    _ = te.addStorage(Stations.eis_yeast, .{ .item = .Yeast });
+    // Stock the pantry (add one item to each storage)
+    _ = te.addToStorage(Stations.eis_flour, .Flour);
+    _ = te.addToStorage(Stations.eis_water, .Water);
+    _ = te.addToStorage(Stations.eis_yeast, .Yeast);
 
-    // IIS - Internal Input Storage (Oven's input buffer) - recipe: 1 of each
-    _ = te.addStorage(Stations.iis, .{ .slots = &.{
-        .{ .item = .Flour, .capacity = 1 },
-        .{ .item = .Water, .capacity = 1 },
-        .{ .item = .Yeast, .capacity = 1 },
-    } });
+    // IIS - Internal Input Storages (Oven's input buffer) - one per recipe ingredient
+    _ = te.addStorage(Stations.iis_flour, .{ .item = .Flour });
+    _ = te.addStorage(Stations.iis_water, .{ .item = .Water });
+    _ = te.addStorage(Stations.iis_yeast, .{ .item = .Yeast });
 
     // IOS - Internal Output Storage (Oven's output buffer) - produces bread
-    _ = te.addStorage(Stations.ios, .{ .slots = &.{
-        .{ .item = .Bread, .capacity = 1 },
-    } });
+    _ = te.addStorage(Stations.ios_bread, .{ .item = .Bread });
 
     // EOS - External Output Storage (Shelf) - holds finished bread
-    _ = te.addStorage(Stations.eos, .{ .slots = &.{
-        .{ .item = .Bread, .capacity = 10 },
-    } });
+    _ = te.addStorage(Stations.eos_bread, .{ .item = .Bread });
 
     // === WORKSTATION SETUP ===
     _ = te.addWorkstation(Stations.workstation, .{
-        .eis = &.{Stations.eis}, // Pull from pantry
-        .iis = Stations.iis, // Into oven input
-        .ios = Stations.ios, // Out of oven output
-        .eos = &.{Stations.eos}, // Store on shelf
+        .eis = &.{ Stations.eis_flour, Stations.eis_water, Stations.eis_yeast }, // Pull from pantry
+        .iis = &.{ Stations.iis_flour, Stations.iis_water, Stations.iis_yeast }, // Recipe: 1 of each
+        .ios = &.{Stations.ios_bread}, // Produces bread
+        .eos = &.{Stations.eos_bread}, // Store on shelf
         .process_duration = 120, // 2 seconds at 60fps
     });
 
-    // Set up callbacks BEFORE adding worker (so initial assignment triggers callback)
-    te.setOnPickupStarted(onPickupStarted);
-    te.setOnProcessStarted(onProcessStarted);
-    te.setOnStoreStarted(onStoreStarted);
-    te.setOnWorkerReleased(onWorkerReleased);
-
-    // === WORKER SETUP === (triggers pickup_started callback)
+    // === WORKER SETUP === (triggers pickup_started hook)
     _ = te.addWorker(Stations.worker, .{});
 
     // Create baker visual
@@ -138,37 +168,6 @@ pub fn init(game: *Game, scene: *Scene) void {
 
     initialized = true;
     std.log.info("[BAKERY] Task engine initialized with EIS/IIS/IOS/EOS", .{});
-}
-
-// === TASK ENGINE CALLBACKS ===
-// Signatures: pickup(worker, ws, eis), process(worker, ws), store(worker, ws, eos), released(worker, ws)
-
-fn onPickupStarted(worker_id: u32, _: u32, _: u32) void {
-    std.log.info("[HOOK] pickup_started: worker {d} -> pantry (EIS)", .{worker_id});
-    sendToStation(worker_id, Stations.pantry);
-}
-
-fn onProcessStarted(worker_id: u32, _: u32) void {
-    std.log.info("[HOOK] process_started: worker {d} -> oven", .{worker_id});
-    sendToStation(worker_id, Stations.oven);
-}
-
-fn onStoreStarted(worker_id: u32, _: u32, _: u32) void {
-    std.log.info("[HOOK] store_started: worker {d} -> shelf (EOS)", .{worker_id});
-    sendToStation(worker_id, Stations.shelf);
-}
-
-fn onWorkerReleased(worker_id: u32, _: u32) void {
-    std.log.info("[HOOK] worker_released: worker {d} -> counter", .{worker_id});
-    sendToStation(worker_id, Stations.counter);
-
-    // Update bread visuals
-    if (task_engine) |*te| {
-        const bread = te.getStorageQuantity(Stations.eos, .Bread);
-        if (game_ptr) |game| {
-            updateBreadVisuals(game, bread);
-        }
-    }
 }
 
 fn createItemVisuals(game: *Game) void {
@@ -259,7 +258,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 var last_bread: u32 = 0;
 
 fn updateStorageVisuals(game: *Game, te: *TaskEngine) void {
-    const bread = te.getStorageQuantity(Stations.eos, .Bread);
+    const bread = te.getStorageQuantity(Stations.eos_bread, .Bread);
     if (bread != last_bread) {
         updateBreadVisuals(game, bread);
         last_bread = bread;

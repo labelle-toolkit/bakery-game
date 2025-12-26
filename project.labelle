@@ -15,7 +15,7 @@
     .plugins = .{
         .{
             .name = "labelle-tasks",
-            .branch = "main",
+            .version = "0.8.0",
             .id_type = "u32",
             .item_type = "main_module.Items",
         },

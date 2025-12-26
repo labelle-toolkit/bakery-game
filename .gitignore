@@ -1,3 +1,7 @@
+# Labelle generated files
+.labelle/
+main.zig
+
 # Zig build artifacts
 .zig-cache/
 zig-out/
