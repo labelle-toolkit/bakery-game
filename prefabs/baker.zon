@@ -1,10 +1,12 @@
+// Baker - Worker entity
 .{
     .components = .{
-        .Position = .{ .x = 200, .y = 450 },
+        .Position = .{ .x = 0, .y = 0 },
         .Shape = .{
-            .type = .circle,
+            .shape = .circle,
             .radius = 20,
             .color = .{ .r = 255, .g = 200, .b = 150, .a = 255 },
         },
+        .Worker = .{ .priority = .Normal },
     },
 }

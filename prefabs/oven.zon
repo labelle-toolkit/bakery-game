@@ -1,11 +1,41 @@
+// Oven workstation prefab
+// Converts 2 Flour into 1 Bread
 .{
     .components = .{
-        .Position = .{ .x = 600, .y = 150 },
+        .Position = .{ .x = 0, .y = 0 },
         .Shape = .{
-            .type = .rectangle,
+            .shape = .rectangle,
             .width = 80,
             .height = 60,
             .color = .{ .r = 200, .g = 80, .b = 50, .a = 255 },
         },
+        // Workstation with inline storage definitions
+        .OvenWorkstation = .{
+            .eis = .{
+                .{ .components = .{
+                    .TaskStorage = .{ .priority = .High },
+                    .TaskStorageRole = .{ .role = .eis },
+                    .Position = .{ .x = -50, .y = 0 },
+                    .Shape = .{ .shape = .circle, .radius = 15, .color = .{ .r = 100, .g = 140, .b = 80, .a = 255 } },
+                } },
+            },
+            .iis = .{
+                .{ .components = .{ .TaskStorage = .{}, .TaskStorageRole = .{ .role = .iis } } },
+                .{ .components = .{ .TaskStorage = .{}, .TaskStorageRole = .{ .role = .iis } } },
+            },
+            .ios = .{
+                .{ .components = .{ .TaskStorage = .{}, .TaskStorageRole = .{ .role = .ios } } },
+            },
+            .eos = .{
+                .{ .components = .{
+                    .TaskStorage = .{ .priority = .High },
+                    .TaskStorageRole = .{ .role = .eos },
+                    .Position = .{ .x = 50, .y = 0 },
+                    .Shape = .{ .shape = .circle, .radius = 15, .color = .{ .r = 160, .g = 120, .b = 80, .a = 255 } },
+                } },
+            },
+        },
+        // Binding with configuration
+        .TaskWorkstationBinding = .{ .process_duration = 120, .priority = .High },
     },
 }

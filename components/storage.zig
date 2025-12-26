@@ -1,56 +1,27 @@
-// Storage component for task engine integration
-//
-// Defines storage configuration that can be used in prefabs.
-// The movement script reads these components and registers them with labelle-tasks.
+// Storage and task components for bakery game
+// Re-exports from labelle-tasks with game-specific additions
 
-const items = @import("items.zig");
-pub const ItemType = items.ItemType;
+const tasks = @import("labelle_tasks");
 
-/// Storage type for task engine
-pub const StorageType = enum {
-    eis, // External Input Storage (e.g., pantry)
-    iis, // Internal Input Storage (workstation input buffer)
-    ios, // Internal Output Storage (workstation output buffer)
-    eos, // External Output Storage (e.g., shelf)
-};
+// Re-export core task types
+pub const TaskStorage = tasks.TaskStorage;
+pub const TaskStorageRole = tasks.TaskStorageRole;
+pub const TaskWorkstationBinding = tasks.TaskWorkstationBinding;
+pub const StorageRole = tasks.StorageRole;
+pub const Priority = tasks.Priority;
 
-/// Slot configuration for a storage
-pub const Slot = struct {
-    item: ItemType,
-    capacity: u32,
-    initial: u32 = 0, // Initial quantity to stock
-};
+// Re-export workstation interface for generic access
+pub const WorkstationInterface = tasks.WorkstationInterface;
 
-/// Storage component - attach to entities to define task engine storages
-pub const Storage = struct {
-    /// Unique ID for this storage (used by task engine)
-    id: u32,
-    /// Type of storage (EIS, IIS, IOS, EOS)
-    storage_type: StorageType,
-    /// Storage slots (up to 4 items per storage)
-    slots: [4]?Slot = .{ null, null, null, null },
-    /// Associated workstation ID (for IIS/IOS)
-    workstation_id: ?u32 = null,
-};
+// Game-specific workstation types
+pub const workstations = @import("workstations.zig");
+pub const OvenWorkstation = workstations.OvenWorkstation;
+pub const MixerWorkstation = workstations.MixerWorkstation;
+pub const CakeOvenWorkstation = workstations.CakeOvenWorkstation;
+pub const WellWorkstation = workstations.WellWorkstation;
 
-/// Workstation component - attach to entities to define task engine workstations
-pub const Workstation = struct {
-    /// Unique ID for this workstation
-    id: u32,
-    /// EIS storage ID (where to pull ingredients)
-    eis_id: u32,
-    /// IIS storage ID (internal input buffer)
-    iis_id: u32,
-    /// IOS storage ID (internal output buffer)
-    ios_id: u32,
-    /// EOS storage ID (where to store output)
-    eos_id: u32,
-    /// Processing duration in frames
-    process_duration: u32 = 120,
-};
-
-/// Worker component - attach to entities to define task engine workers
+/// Worker component - attach to entities that can perform tasks
 pub const Worker = struct {
-    /// Unique ID for this worker
-    id: u32,
+    /// Priority for worker selection (higher = preferred)
+    priority: Priority = .Normal,
 };

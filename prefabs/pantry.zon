@@ -1,11 +1,14 @@
+// Pantry - External Input Storage for flour
 .{
     .components = .{
-        .Position = .{ .x = 200, .y = 150 },
+        .Position = .{ .x = 0, .y = 0 },
         .Shape = .{
-            .type = .rectangle,
+            .shape = .rectangle,
             .width = 80,
             .height = 60,
             .color = .{ .r = 100, .g = 140, .b = 80, .a = 255 },
         },
+        .TaskStorage = .{ .priority = .Normal, .quantity = 5, .capacity = 10 },
+        .TaskStorageRole = .{ .role = .eis },
     },
 }
