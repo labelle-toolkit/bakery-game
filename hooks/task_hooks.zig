@@ -1,71 +1,28 @@
 // Task hooks for the bakery game
 //
-// These hooks are automatically detected by the generator and wired up
-// to the TaskEngine. Each hook fires when the corresponding task step begins.
+// Initializes the task engine on game_init and cleans up on game_deinit.
+// Using game_init ensures the task engine is ready before the initial scene loads,
+// so Workstation.onAdd can register workstations during entity creation.
 
 const std = @import("std");
-const tasks = @import("labelle_tasks");
-const items = @import("../components/items.zig");
+const engine = @import("labelle-engine");
+const task_state = @import("../components/task_state.zig");
 
-const HookPayload = tasks.hooks.HookPayload(u32, items.ItemType);
+/// Initialize task engine during game initialization
+pub fn game_init(payload: engine.HookPayload) void {
+    const info = payload.game_init;
 
-// Import movement script for pathfinding control
-const movement = @import("../scripts/movement.zig");
+    task_state.init(info.allocator) catch |err| {
+        std.log.err("[TaskHooks] Failed to initialize task engine: {}", .{err});
+        return;
+    };
 
-// Global state for visual feedback
-pub var last_event: []const u8 = "Waiting for activity...";
-pub var pickup_count: u32 = 0;
-pub var process_count: u32 = 0;
-pub var store_count: u32 = 0;
-pub var bread_produced: u32 = 0;
-
-/// Called when a worker starts picking up ingredients from storage
-pub fn pickup_started(payload: HookPayload) void {
-    const info = payload.pickup_started;
-    pickup_count += 1;
-    last_event = "Baker walking to pantry...";
-
-    // Move baker to pantry
-    movement.sendToStation(info.worker_id, movement.Stations.pantry);
-
-    std.log.info("[BAKERY] Pickup started: baker={d} -> pantry", .{info.worker_id});
+    std.log.info("[TaskHooks] game_init: task engine ready", .{});
 }
 
-/// Called when a worker starts processing at the workstation
-pub fn process_started(payload: HookPayload) void {
-    const info = payload.process_started;
-    process_count += 1;
-    last_event = "Baker walking to oven...";
-
-    // Move baker to oven
-    movement.sendToStation(info.worker_id, movement.Stations.oven);
-
-    std.log.info("[BAKERY] Processing: baker={d} -> oven", .{info.worker_id});
-}
-
-/// Called when a worker starts storing the output
-pub fn store_started(payload: HookPayload) void {
-    const info = payload.store_started;
-    store_count += 1;
-    last_event = "Baker carrying bread to shelf...";
-
-    // Move baker to shelf
-    movement.sendToStation(info.worker_id, movement.Stations.shelf);
-
-    std.log.info("[BAKERY] Storing: baker={d} -> shelf", .{info.worker_id});
-}
-
-/// Called when a worker completes a task and is released
-pub fn worker_released(payload: HookPayload) void {
-    const info = payload.worker_released;
-    bread_produced += 1;
-    last_event = "Fresh bread ready! Baker returning to counter...";
-
-    // Move baker back to counter
-    movement.sendToStation(info.worker_id, movement.Stations.counter);
-
-    std.log.info("[BAKERY] Cycle complete! baker={d} -> counter, total bread={d}", .{
-        info.worker_id,
-        bread_produced,
-    });
+/// Clean up task engine on game deinit
+pub fn game_deinit(payload: engine.HookPayload) void {
+    _ = payload;
+    task_state.deinit();
+    std.log.info("[TaskHooks] game_deinit: task engine cleaned up", .{});
 }

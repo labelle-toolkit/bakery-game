@@ -1,6 +1,6 @@
 .{
     .name = "main",
-    .scripts = .{"movement"},
+    .scripts = .{"storage_inspector"},
     .entities = .{
         // Counter
         .{
@@ -14,7 +14,7 @@
                 },
             },
         },
-        // Pantry
+        // Pantry - visual representation
         .{
             .components = .{
                 .Position = .{ .x = 200, .y = 150 },
@@ -26,19 +26,47 @@
                 },
             },
         },
-        // Oven
+        // EIS - Flour storage (external input from pantry)
         .{
             .components = .{
-                .Position = .{ .x = 600, .y = 150 },
-                .Shape = .{
-                    .type = .rectangle,
-                    .width = 80,
-                    .height = 60,
-                    .color = .{ .r = 200, .g = 80, .b = 50, .a = 255 },
+                .Storage = .{
+                    .storage_type = .eis,
+                    .initial_item = .Flour,
                 },
             },
         },
-        // Shelf
+        // EIS - Water storage (external input from pantry)
+        .{
+            .components = .{
+                .Storage = .{
+                    .storage_type = .eis,
+                    .initial_item = .Water,
+                },
+            },
+        },
+        // EIS - Yeast storage (external input from pantry)
+        .{
+            .components = .{
+                .Storage = .{
+                    .storage_type = .eis,
+                    .initial_item = .Yeast,
+                },
+            },
+        },
+        // Oven Workstation (with IIS defined in prefab)
+        .{ .prefab = "oven" },
+        // Water Well - producer workstation with IOS and EOS only
+        .{ .prefab = "water_well" },
+        // IOS - Bread storage (internal output for oven)
+        .{
+            .components = .{
+                .Storage = .{
+                    .storage_type = .ios,
+                    .initial_item = null,
+                },
+            },
+        },
+        // Shelf - visual representation
         .{
             .components = .{
                 .Position = .{ .x = 600, .y = 450 },
@@ -47,6 +75,15 @@
                     .width = 80,
                     .height = 40,
                     .color = .{ .r = 160, .g = 120, .b = 80, .a = 255 },
+                },
+            },
+        },
+        // EOS - Bread storage (external output to shelf)
+        .{
+            .components = .{
+                .Storage = .{
+                    .storage_type = .eos,
+                    .initial_item = null,
                 },
             },
         },
@@ -67,6 +104,12 @@
             .components = .{
                 .Position = .{ .x = 600, .y = 220 },
                 .Text = .{ .content = "Oven", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 100, .y = 440 },
+                .Text = .{ .content = "Well (Producer)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{

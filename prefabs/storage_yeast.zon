@@ -1,0 +1,8 @@
+.{
+    .components = .{
+        .Storage = .{
+            .storage_type = .eis,
+            .initial_item = .Yeast,
+        },
+    },
+}

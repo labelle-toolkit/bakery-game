@@ -23,10 +23,10 @@ pub const ItemType = enum {
 // Alias for component registry
 pub const Items = ItemType;
 
-// Re-export storage components
+// Re-export component types for convenience
 const storage = @import("storage.zig");
+const workstation = @import("workstation.zig");
+
 pub const Storage = storage.Storage;
 pub const StorageType = storage.StorageType;
-pub const Slot = storage.Slot;
-pub const Workstation = storage.Workstation;
-pub const Worker = storage.Worker;
+pub const Workstation = workstation.Workstation;

@@ -12,16 +12,5 @@
         .target_fps = 60,
     },
     .resources = .{},
-    .plugins = .{
-        .{
-            .name = "labelle-tasks",
-            .path = "../labelle-tasks",
-            .id_type = "u32",
-            .item_type = "main_module.Items",
-        },
-        .{
-            .name = "labelle-pathfinding",
-            .version = "2.7.0",
-        },
-    },
+    .plugins = .{},
 }
