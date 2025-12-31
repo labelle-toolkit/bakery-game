@@ -4,29 +4,25 @@
     .entities = .{
         // Baker (Worker) - will pick up dangling items
         .{
+            .prefab = "baker",
             .components = .{
                 .Position = .{ .x = 400, .y = 300 },
-                .Shape = .{
-                    .type = .circle,
-                    .radius = 15,
-                    .color = .{ .r = 255, .g = 200, .b = 150, .a = 255 },
-                },
-                .Worker = .{},
             },
         },
         // Dangling Flour item - will be picked up by worker (far left)
         .{
+            .prefab = "flour",
             .components = .{
                 .Position = .{ .x = 100, .y = 150 },
-                .Shape = .{
-                    .type = .rectangle,
-                    .width = 20,
-                    .height = 20,
-                    .color = .{ .r = 255, .g = 255, .b = 200, .a = 255 },
-                },
-                .DanglingItem = .{
-                    .item_type = .Flour,
-                },
+                .DanglingItem = .{ .item_type = .Flour },
+            },
+        },
+        // Dangling Water item
+        .{
+            .prefab = "water",
+            .components = .{
+                .Position = .{ .x = 150, .y = 150 },
+                .DanglingItem = .{ .item_type = .Water },
             },
         },
         // Label for dangling item

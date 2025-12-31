@@ -45,10 +45,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         while (iter.next()) |entity| {
             const ws = view.getConst(entity);
             workstation_count += 1;
-            std.log.warn("[StorageInspector] Workstation entity={any}, process_duration={d}, input_storages={d}", .{
+            std.log.warn("[StorageInspector] Workstation entity={any}, process_duration={d}, external_input_storages={d}", .{
                 entity,
                 ws.process_duration,
-                ws.input_storages.len,
+                ws.external_input_storages.len,
             });
         }
     }

@@ -21,8 +21,8 @@ pub const Workstation = struct {
     /// Processing duration in frames (0 = use default)
     process_duration: u32 = 120,
 
-    /// Internal Input Storages (IIS) - input buffers for the workstation
-    input_storages: []const Entity = &.{},
+    /// External Input Storages (EIS) - external input storages that accept dangling items
+    external_input_storages: []const Entity = &.{},
 
     /// Internal Output Storages (IOS) - output buffers for the workstation
     output_storages: []const Entity = &.{},
@@ -51,9 +51,9 @@ pub const Workstation = struct {
         };
 
         std.log.warn("[Workstation.onAdd] Entity {d} - process_duration: {d}", .{ entity_id, ws.process_duration });
-        std.log.warn("[Workstation.onAdd] Entity {d} - input_storages: {d}, output_storages: {d}, external_outputs: {d}", .{
+        std.log.warn("[Workstation.onAdd] Entity {d} - external_input_storages: {d}, output_storages: {d}, external_outputs: {d}", .{
             entity_id,
-            ws.input_storages.len,
+            ws.external_input_storages.len,
             ws.output_storages.len,
             ws.external_outputs.len,
         });
@@ -134,9 +134,9 @@ pub const Workstation = struct {
             }
         }.call;
 
-        // Process input_storages (default to IIS)
-        for (ws.input_storages) |storage_entity| {
-            processStorage(registry, storage_entity, &eis_ids, &eis_count, &iis_ids, &iis_count, &ios_ids, &ios_count, &eos_ids, &eos_count, .iis);
+        // Process external_input_storages (default to EIS)
+        for (ws.external_input_storages) |storage_entity| {
+            processStorage(registry, storage_entity, &eis_ids, &eis_count, &iis_ids, &iis_count, &ios_ids, &ios_count, &eos_ids, &eos_count, .eis);
         }
 
         // Process output_storages (default to IOS)
