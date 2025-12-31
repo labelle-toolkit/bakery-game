@@ -1,37 +1,99 @@
-// Bakery main scene - demonstrates task workstation integration
 .{
     .name = "main",
-    .scripts = .{"movement"},
+    .scripts = .{"storage_inspector"},
     .entities = .{
-        // Pantry (EIS - source of flour)
+        // Counter
         .{
-            .prefab = "pantry",
+            .components = .{
+                .Position = .{ .x = 200, .y = 450 },
+                .Shape = .{
+                    .type = .rectangle,
+                    .width = 80,
+                    .height = 40,
+                    .color = .{ .r = 139, .g = 90, .b = 43, .a = 255 },
+                },
+            },
+        },
+        // Pantry - visual representation
+        .{
             .components = .{
                 .Position = .{ .x = 200, .y = 150 },
+                .Shape = .{
+                    .type = .rectangle,
+                    .width = 80,
+                    .height = 60,
+                    .color = .{ .r = 100, .g = 140, .b = 80, .a = 255 },
+                },
             },
         },
-        // Oven workstation with inline storages
+        // EIS - Flour storage (external input from pantry)
         .{
-            .prefab = "oven",
             .components = .{
-                .Position = .{ .x = 500, .y = 300 },
+                .Storage = .{
+                    .storage_type = .eis,
+                    .initial_item = .Flour,
+                },
             },
         },
-        // Shelf (EOS - finished bread)
+        // EIS - Water storage (external input from pantry)
         .{
-            .prefab = "shelf",
             .components = .{
-                .Position = .{ .x = 700, .y = 450 },
+                .Storage = .{
+                    .storage_type = .eis,
+                    .initial_item = .Water,
+                },
             },
         },
-        // Baker worker
+        // EIS - Yeast storage (external input from pantry)
         .{
-            .prefab = "baker",
             .components = .{
-                .Position = .{ .x = 350, .y = 400 },
+                .Storage = .{
+                    .storage_type = .eis,
+                    .initial_item = .Yeast,
+                },
+            },
+        },
+        // Oven Workstation (with IIS defined in prefab)
+        .{ .prefab = "oven" },
+        // Water Well - producer workstation with IOS and EOS only
+        .{ .prefab = "water_well" },
+        // IOS - Bread storage (internal output for oven)
+        .{
+            .components = .{
+                .Storage = .{
+                    .storage_type = .ios,
+                    .initial_item = null,
+                },
+            },
+        },
+        // Shelf - visual representation
+        .{
+            .components = .{
+                .Position = .{ .x = 600, .y = 450 },
+                .Shape = .{
+                    .type = .rectangle,
+                    .width = 80,
+                    .height = 40,
+                    .color = .{ .r = 160, .g = 120, .b = 80, .a = 255 },
+                },
+            },
+        },
+        // EOS - Bread storage (external output to shelf)
+        .{
+            .components = .{
+                .Storage = .{
+                    .storage_type = .eos,
+                    .initial_item = null,
+                },
             },
         },
         // Labels
+        .{
+            .components = .{
+                .Position = .{ .x = 200, .y = 500 },
+                .Text = .{ .content = "Counter", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+            },
+        },
         .{
             .components = .{
                 .Position = .{ .x = 200, .y = 220 },
@@ -40,26 +102,26 @@
         },
         .{
             .components = .{
-                .Position = .{ .x = 500, .y = 370 },
-                .Text = .{ .content = "Oven (Workstation)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Position = .{ .x = 600, .y = 220 },
+                .Text = .{ .content = "Oven", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
-                .Position = .{ .x = 700, .y = 500 },
+                .Position = .{ .x = 100, .y = 440 },
+                .Text = .{ .content = "Well (Producer)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 600, .y = 500 },
                 .Text = .{ .content = "Shelf (EOS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
-                .Position = .{ .x = 350, .y = 440 },
-                .Text = .{ .content = "Baker", .size = 14, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
-            },
-        },
-        .{
-            .components = .{
                 .Position = .{ .x = 400, .y = 650 },
-                .Text = .{ .content = "Bakery - Comptime Workstation Demo", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                .Text = .{ .content = "Bakery - EIS/IIS/IOS/EOS Task Engine", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
             },
         },
     },

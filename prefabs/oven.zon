@@ -1,27 +1,22 @@
-// Oven workstation prefab
-// Converts 2 Flour into 1 Bread
 .{
     .components = .{
-        .Position = .{ .x = 0, .y = 0 },
-        .OvenWorkstation = .{
-            .eis = .{
-                .{ .components = .{
-                    .Position = .{ .x = -60, .y = 0 },
-                } },
-            },
-            .iis = .{
-                .{ .components = .{} },
-                .{ .components = .{} },
-            },
-            .ios = .{
-                .{ .components = .{} },
-            },
-            .eos = .{
-                .{ .components = .{
-                    .Position = .{ .x = 60, .y = 0 },
-                } },
+        .Position = .{ .x = 600, .y = 150 },
+        .Shape = .{
+            .type = .rectangle,
+            .width = 80,
+            .height = 60,
+            .color = .{ .r = 200, .g = 80, .b = 50, .a = 255 },
+        },
+        .Workstation = .{
+            .process_duration = 120,
+            .input_storages = .{
+                // IIS - Flour storage
+                .{ .components = .{ .Storage = .{ .storage_type = .iis, .initial_item = null } } },
+                // IIS - Water storage
+                .{ .components = .{ .Storage = .{ .storage_type = .iis, .initial_item = null } } },
+                // IIS - Yeast storage
+                .{ .components = .{ .Storage = .{ .storage_type = .iis, .initial_item = null } } },
             },
         },
-        .TaskWorkstationBinding = .{ .process_duration = 120 },
     },
 }
