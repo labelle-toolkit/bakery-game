@@ -13,6 +13,7 @@ const Entity = engine.Entity;
 const Game = engine.Game;
 const Storage = storage_mod.Storage;
 const StorageType = storage_mod.StorageType;
+const StorageRole = task_state.StorageRole;
 
 /// Workstation component - attach to entities to define task engine workstations
 /// The ECS entity ID will be used as the workstation ID.
@@ -37,6 +38,9 @@ pub const Workstation = struct {
         // Access the game and registry to query component data
         const game = payload.getGame(Game);
         const registry = game.getRegistry();
+
+        // Ensure task_state has access to the registry for distance calculations
+        task_state.setRegistry(registry);
 
         // Get the Workstation component to access configuration
         const ws_entity = engine.entityFromU64(entity_id);
@@ -111,8 +115,19 @@ pub const Workstation = struct {
                     },
                 }
 
-                // Register storage with task engine
-                task_state.addStorage(storage_id, initial_item) catch |err| {
+                // Convert StorageType to StorageRole
+                const role: StorageRole = switch (storage_type) {
+                    .eis => .eis,
+                    .iis => .iis,
+                    .ios => .ios,
+                    .eos => .eos,
+                };
+
+                // Register storage with task engine using StorageConfig
+                task_state.addStorage(storage_id, .{
+                    .role = role,
+                    .initial_item = initial_item,
+                }) catch |err| {
                     std.log.err("[Workstation.onAdd] Failed to add storage {d}: {}", .{ storage_id, err });
                 };
             }

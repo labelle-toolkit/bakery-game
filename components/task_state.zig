@@ -5,12 +5,16 @@
 
 const std = @import("std");
 const tasks = @import("labelle-tasks");
+const engine = @import("labelle-engine");
 const items = @import("items.zig");
 
 pub const ItemType = items.ItemType;
 
 // GameId is u64 to match entity_id from ComponentPayload
 pub const GameId = u64;
+
+// Re-export storage role for convenience
+pub const StorageRole = tasks.StorageRole;
 
 // Hook receiver for task engine events
 pub const BakeryTaskHooks = struct {
@@ -72,6 +76,16 @@ pub const BakeryTaskHooks = struct {
             payload.workstation_id,
         });
     }
+
+    pub fn pickup_dangling_started(payload: anytype) void {
+        std.log.info("[TaskEngine] pickup_dangling_started: worker={d}, item={d}, item_type={}, target_eis={d}", .{
+            payload.worker_id,
+            payload.item_id,
+            payload.item_type,
+            payload.target_eis_id,
+        });
+        // TODO: Start worker movement towards the dangling item
+    }
 };
 
 // The task engine type
@@ -81,10 +95,34 @@ pub const TaskEngine = tasks.Engine(GameId, ItemType, BakeryTaskHooks);
 pub var task_engine: ?*TaskEngine = null;
 var engine_allocator: ?std.mem.Allocator = null;
 
+// Game registry reference for distance calculations
+var game_registry: ?*engine.Registry = null;
+
 // Component type (for component registry compatibility)
 pub const TaskState = struct {
     _unused: u8 = 0,
 };
+
+/// Distance function for spatial queries - simple Euclidean distance
+fn getEntityDistance(from_id: GameId, to_id: GameId) ?f32 {
+    const registry = game_registry orelse return null;
+
+    const from_entity = engine.entityFromU64(from_id);
+    const to_entity = engine.entityFromU64(to_id);
+
+    const Position = engine.render.Position;
+    const from_pos = registry.tryGet(Position, from_entity) orelse return null;
+    const to_pos = registry.tryGet(Position, to_entity) orelse return null;
+
+    const dx = to_pos.x - from_pos.x;
+    const dy = to_pos.y - from_pos.y;
+    return @sqrt(dx * dx + dy * dy);
+}
+
+/// Set the game registry for distance calculations
+pub fn setRegistry(registry: *engine.Registry) void {
+    game_registry = registry;
+}
 
 /// Initialize the task engine (called from scene_load hook)
 pub fn init(allocator: std.mem.Allocator) !void {
@@ -95,22 +133,23 @@ pub fn init(allocator: std.mem.Allocator) !void {
 
     engine_allocator = allocator;
 
-    const engine = try allocator.create(TaskEngine);
-    engine.* = TaskEngine.init(allocator, .{});
-    task_engine = engine;
+    const task_eng = try allocator.create(TaskEngine);
+    task_eng.* = TaskEngine.init(allocator, .{}, getEntityDistance);
+    task_engine = task_eng;
 
-    std.log.info("[TaskState] Task engine initialized", .{});
+    std.log.info("[TaskState] Task engine initialized with distance function", .{});
 }
 
 /// Deinitialize the task engine (called from scene_unload hook)
 pub fn deinit() void {
-    if (task_engine) |engine| {
-        engine.deinit();
+    if (task_engine) |task_eng| {
+        task_eng.deinit();
         if (engine_allocator) |allocator| {
-            allocator.destroy(engine);
+            allocator.destroy(task_eng);
         }
         task_engine = null;
         engine_allocator = null;
+        game_registry = null;
         std.log.info("[TaskState] Task engine deinitialized", .{});
     }
 }
@@ -121,10 +160,15 @@ pub fn getEngine() ?*TaskEngine {
 }
 
 /// Add a storage to the task engine
-pub fn addStorage(storage_id: GameId, item_type: ?ItemType) !void {
-    if (task_engine) |engine| {
-        try engine.addStorage(storage_id, item_type);
-        std.log.info("[TaskState] Added storage: id={d}, item={?}", .{ storage_id, item_type });
+pub fn addStorage(storage_id: GameId, config: TaskEngine.StorageConfig) !void {
+    if (task_engine) |task_eng| {
+        try task_eng.addStorage(storage_id, config);
+        std.log.info("[TaskState] Added storage: id={d}, role={}, accepts={?}, initial_item={?}", .{
+            storage_id,
+            config.role,
+            config.accepts,
+            config.initial_item,
+        });
     } else {
         std.log.warn("[TaskState] Cannot add storage - engine not initialized", .{});
     }
@@ -132,8 +176,8 @@ pub fn addStorage(storage_id: GameId, item_type: ?ItemType) !void {
 
 /// Add a workstation to the task engine
 pub fn addWorkstation(workstation_id: GameId, config: TaskEngine.WorkstationConfig) !void {
-    if (task_engine) |engine| {
-        try engine.addWorkstation(workstation_id, config);
+    if (task_engine) |task_eng| {
+        try task_eng.addWorkstation(workstation_id, config);
         std.log.info("[TaskState] Added workstation: id={d}, eis={d}, iis={d}, ios={d}, eos={d}", .{
             workstation_id,
             config.eis.len,
@@ -148,10 +192,30 @@ pub fn addWorkstation(workstation_id: GameId, config: TaskEngine.WorkstationConf
 
 /// Add a worker to the task engine
 pub fn addWorker(worker_id: GameId) !void {
-    if (task_engine) |engine| {
-        try engine.addWorker(worker_id);
+    if (task_engine) |task_eng| {
+        try task_eng.addWorker(worker_id);
         std.log.info("[TaskState] Added worker: id={d}", .{worker_id});
     } else {
         std.log.warn("[TaskState] Cannot add worker - engine not initialized", .{});
+    }
+}
+
+/// Add a dangling item to the task engine
+pub fn addDanglingItem(item_id: GameId, item_type: ItemType) !void {
+    if (task_engine) |task_eng| {
+        try task_eng.addDanglingItem(item_id, item_type);
+        std.log.info("[TaskState] Added dangling item: id={d}, type={}", .{ item_id, item_type });
+    } else {
+        std.log.warn("[TaskState] Cannot add dangling item - engine not initialized", .{});
+    }
+}
+
+/// Remove a dangling item from the task engine
+pub fn removeDanglingItem(item_id: GameId) void {
+    if (task_engine) |task_eng| {
+        task_eng.removeDanglingItem(item_id);
+        std.log.info("[TaskState] Removed dangling item: id={d}", .{item_id});
+    } else {
+        std.log.warn("[TaskState] Cannot remove dangling item - engine not initialized", .{});
     }
 }
