@@ -18,8 +18,9 @@ pub const Worker = struct {
         const game = payload.getGame(engine.Game);
         const registry = game.getRegistry();
 
-        // Ensure task_state has access to the registry for distance calculations
+        // Ensure task_state has access to the registry and game for position updates
         task_state.setRegistry(registry);
+        task_state.setGame(game);
 
         // Register worker with task engine
         task_state.addWorker(entity_id) catch |err| {

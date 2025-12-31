@@ -40,8 +40,9 @@ pub const Storage = struct {
         const game = payload.getGame(engine.Game);
         const registry = game.getRegistry();
 
-        // Ensure task_state has access to the registry for distance calculations
+        // Ensure task_state has access to the registry and game for position updates
         task_state.setRegistry(registry);
+        task_state.setGame(game);
 
         // Get the Storage component
         const entity = engine.entityFromU64(entity_id);

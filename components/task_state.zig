@@ -44,6 +44,14 @@ pub const BakeryTaskHooks = struct {
             payload.worker_id,
             payload.storage_id,
         });
+
+        // Queue movement to storage
+        const registry = game_registry orelse return;
+        const Position = engine.render.Position;
+        const storage_entity = engine.entityFromU64(payload.storage_id);
+        const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
+
+        queueMovement(payload.worker_id, storage_pos.x, storage_pos.y, .store_to_eis);
     }
 
     pub fn worker_assigned(payload: anytype) void {
@@ -84,7 +92,46 @@ pub const BakeryTaskHooks = struct {
             payload.item_type,
             payload.target_eis_id,
         });
-        // TODO: Start worker movement towards the dangling item
+
+        // Queue movement to dangling item
+        const registry = game_registry orelse return;
+        const Position = engine.render.Position;
+        const item_entity = engine.entityFromU64(payload.item_id);
+        const item_pos = registry.tryGet(Position, item_entity) orelse return;
+
+        queueMovement(payload.worker_id, item_pos.x, item_pos.y, .pickup_dangling);
+    }
+
+    pub fn item_delivered(payload: anytype) void {
+        std.log.info("[TaskEngine] item_delivered: worker={d}, item={d}, storage={d}", .{
+            payload.worker_id,
+            payload.item_id,
+            payload.storage_id,
+        });
+
+        // Move the item visual to the storage position
+        const game = game_ptr orelse return;
+        const registry = game_registry orelse return;
+        const Position = engine.render.Position;
+        const Shape = engine.render.Shape;
+
+        const storage_entity = engine.entityFromU64(payload.storage_id);
+        const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
+
+        const item_entity = engine.entityFromU64(payload.item_id);
+
+        // Use game.setPositionXY to update position AND sync to graphics
+        game.setPositionXY(item_entity, storage_pos.x, storage_pos.y);
+
+        // Set item z_index higher than storage so it renders on top
+        const storage_z = if (registry.tryGet(Shape, storage_entity)) |s| s.z_index else 128;
+        game.setZIndex(item_entity, storage_z + 1);
+
+        std.log.info("[TaskEngine] Moved item {d} to storage position ({d:.1}, {d:.1})", .{
+            payload.item_id,
+            storage_pos.x,
+            storage_pos.y,
+        });
     }
 };
 
@@ -97,6 +144,9 @@ var engine_allocator: ?std.mem.Allocator = null;
 
 // Game registry reference for distance calculations
 var game_registry: ?*engine.Registry = null;
+
+// Game pointer for position updates
+var game_ptr: ?*engine.Game = null;
 
 // Component type (for component registry compatibility)
 pub const TaskState = struct {
@@ -122,6 +172,11 @@ fn getEntityDistance(from_id: GameId, to_id: GameId) ?f32 {
 /// Set the game registry for distance calculations
 pub fn setRegistry(registry: *engine.Registry) void {
     game_registry = registry;
+}
+
+/// Set the game pointer for position updates
+pub fn setGame(game: *engine.Game) void {
+    game_ptr = game;
 }
 
 /// Initialize the task engine (called from scene_load hook)
@@ -218,4 +273,81 @@ pub fn removeDanglingItem(item_id: GameId) void {
     } else {
         std.log.warn("[TaskState] Cannot remove dangling item - engine not initialized", .{});
     }
+}
+
+/// Get the game registry (for position lookups)
+pub fn getRegistry() ?*engine.Registry {
+    return game_registry;
+}
+
+/// Notify task engine that a pickup was completed
+pub fn pickupCompleted(worker_id: GameId) bool {
+    if (task_engine) |task_eng| {
+        return task_eng.pickupCompleted(worker_id);
+    }
+    return false;
+}
+
+/// Notify task engine that a store was completed
+pub fn storeCompleted(worker_id: GameId) bool {
+    if (task_engine) |task_eng| {
+        return task_eng.storeCompleted(worker_id);
+    }
+    return false;
+}
+
+// ============================================
+// Pending Movements Queue
+// ============================================
+// Used to communicate movement targets from hooks to worker_movement script
+// without creating circular import dependencies.
+
+pub const MovementAction = enum {
+    pickup_dangling,
+    store_to_eis,
+};
+
+pub const PendingMovement = struct {
+    worker_id: GameId,
+    target_x: f32,
+    target_y: f32,
+    action: MovementAction,
+};
+
+var pending_movements: std.ArrayListUnmanaged(PendingMovement) = .{};
+var movements_initialized: bool = false;
+const movements_allocator = std.heap.page_allocator;
+
+fn deinitMovements() void {
+    if (movements_initialized) {
+        pending_movements.deinit(movements_allocator);
+        movements_initialized = false;
+    }
+}
+
+/// Queue a movement for the worker_movement script to process
+pub fn queueMovement(worker_id: GameId, target_x: f32, target_y: f32, action: MovementAction) void {
+    movements_initialized = true;
+    pending_movements.append(movements_allocator, .{
+        .worker_id = worker_id,
+        .target_x = target_x,
+        .target_y = target_y,
+        .action = action,
+    }) catch |err| {
+        std.log.err("[TaskState] Failed to queue movement: {}", .{err});
+    };
+}
+
+/// Get and clear pending movements (called by worker_movement script)
+pub fn takePendingMovements() []PendingMovement {
+    if (!movements_initialized or pending_movements.items.len == 0) {
+        return &.{};
+    }
+    const slice = pending_movements.toOwnedSlice(movements_allocator) catch return &.{};
+    return slice;
+}
+
+/// Free the movements slice returned by takePendingMovements
+pub fn freePendingMovements(slice: []PendingMovement) void {
+    std.heap.page_allocator.free(slice);
 }

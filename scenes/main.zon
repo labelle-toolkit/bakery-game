@@ -1,6 +1,6 @@
 .{
     .name = "main",
-    .scripts = .{"storage_inspector"},
+    .scripts = .{ "storage_inspector", "worker_movement", "delivery_validator", "camera_control" },
     .entities = .{
         // Baker (Worker) - will pick up dangling items
         .{
@@ -14,10 +14,10 @@
                 .Worker = .{},
             },
         },
-        // Dangling Flour item - will be picked up by worker
+        // Dangling Flour item - will be picked up by worker (far left)
         .{
             .components = .{
-                .Position = .{ .x = 300, .y = 200 },
+                .Position = .{ .x = 100, .y = 150 },
                 .Shape = .{
                     .type = .rectangle,
                     .width = 20,
@@ -29,10 +29,10 @@
                 },
             },
         },
-        // Empty EIS that accepts Flour (dangling item target)
+        // Empty EIS that accepts Flour (dangling item target - far right)
         .{
             .components = .{
-                .Position = .{ .x = 100, .y = 100 },
+                .Position = .{ .x = 700, .y = 450 },
                 .Shape = .{
                     .type = .rectangle,
                     .width = 40,
@@ -50,22 +50,22 @@
         // Label for dangling item
         .{
             .components = .{
-                .Position = .{ .x = 300, .y = 230 },
-                .Text = .{ .content = "Dangling Flour", .size = 12, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Position = .{ .x = 100, .y = 180 },
+                .Text = .{ .text = "Dangling Flour", .size = 12, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         // Label for empty EIS
         .{
             .components = .{
-                .Position = .{ .x = 100, .y = 150 },
-                .Text = .{ .content = "Empty EIS", .size = 12, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Position = .{ .x = 700, .y = 500 },
+                .Text = .{ .text = "Target Storage", .size = 12, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         // Label for worker
         .{
             .components = .{
                 .Position = .{ .x = 400, .y = 330 },
-                .Text = .{ .content = "Baker", .size = 12, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Text = .{ .text = "Baker", .size = 12, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         // Counter
@@ -157,37 +157,37 @@
         .{
             .components = .{
                 .Position = .{ .x = 200, .y = 500 },
-                .Text = .{ .content = "Counter", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Text = .{ .text = "Counter", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
                 .Position = .{ .x = 200, .y = 220 },
-                .Text = .{ .content = "Pantry (EIS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Text = .{ .text = "Pantry (EIS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
                 .Position = .{ .x = 600, .y = 220 },
-                .Text = .{ .content = "Oven", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Text = .{ .text = "Oven", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
                 .Position = .{ .x = 100, .y = 440 },
-                .Text = .{ .content = "Well (Producer)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Text = .{ .text = "Well (Producer)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
                 .Position = .{ .x = 600, .y = 500 },
-                .Text = .{ .content = "Shelf (EOS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Text = .{ .text = "Shelf (EOS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
                 .Position = .{ .x = 400, .y = 650 },
-                .Text = .{ .content = "Bakery - EIS/IIS/IOS/EOS Task Engine", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                .Text = .{ .text = "Bakery - EIS/IIS/IOS/EOS Task Engine", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
             },
         },
     },

@@ -11,6 +11,10 @@
         .title = "Bakery Game - Task Hooks Demo",
         .target_fps = 60,
     },
+    .camera = .{
+        .x = -160,
+        .y = -20,
+    },
     .resources = .{},
     .plugins = .{
         .{
