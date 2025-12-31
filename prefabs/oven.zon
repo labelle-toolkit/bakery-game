@@ -1,4 +1,3 @@
-// Oven prefab
 .{
     .components = .{
         .Position = .{ .x = 600, .y = 150 },
@@ -7,6 +6,17 @@
             .width = 80,
             .height = 60,
             .color = .{ .r = 200, .g = 80, .b = 50, .a = 255 },
+        },
+        .Workstation = .{
+            .process_duration = 120,
+            .input_storages = .{
+                // IIS - Flour storage
+                .{ .components = .{ .Storage = .{ .storage_type = .iis, .initial_item = null } } },
+                // IIS - Water storage
+                .{ .components = .{ .Storage = .{ .storage_type = .iis, .initial_item = null } } },
+                // IIS - Yeast storage
+                .{ .components = .{ .Storage = .{ .storage_type = .iis, .initial_item = null } } },
+            },
         },
     },
 }

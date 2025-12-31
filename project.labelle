@@ -12,5 +12,10 @@
         .target_fps = 60,
     },
     .resources = .{},
-    .plugins = .{},
+    .plugins = .{
+        .{
+            .name = "labelle-tasks",
+            .path = "../../labelle-tasks",
+        },
+    },
 }
