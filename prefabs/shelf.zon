@@ -1,8 +1,0 @@
-// Shelf - External Output Storage for finished products
-.{
-    .components = .{
-        .Position = .{ .x = 0, .y = 0 },
-        .TaskStorage = .{ .capacity = 10 },
-        .TaskStorageRole = .{ .role = .eos },
-    },
-}

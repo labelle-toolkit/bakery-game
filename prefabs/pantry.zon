@@ -1,8 +1,0 @@
-// Pantry - External Input Storage for flour
-.{
-    .components = .{
-        .Position = .{ .x = 0, .y = 0 },
-        .TaskStorage = .{ .quantity = 5, .capacity = 10 },
-        .TaskStorageRole = .{ .role = .eis },
-    },
-}
