@@ -1,15 +1,13 @@
-// Storage and Workstation inspector script
+// Storage inspector script
 //
-// This script queries for Storage and Workstation components and logs their details
+// This script queries for Storage components and logs their details
 
 const std = @import("std");
 const engine = @import("labelle-engine");
-const workstation_mod = @import("../components/workstation.zig");
 const storage_mod = @import("../components/storage.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
-const Workstation = workstation_mod.Workstation;
 const Storage = storage_mod.Storage;
 const StorageType = storage_mod.StorageType;
 
@@ -32,23 +30,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
     std.log.warn("[StorageInspector] === Inspecting Entities ===", .{});
 
-    // Query for workstations
+    // Query for storages
     const registry = game.getRegistry();
-
-    // Count and log workstations
-    {
-        var view = registry.view(.{Workstation});
-        var iter = view.entityIterator();
-        var count: u32 = 0;
-
-        while (iter.next()) |entity| {
-            const ws = view.getConst(entity);
-            count += 1;
-            std.log.warn("[StorageInspector] Workstation entity={any}, process_duration={d}", .{ entity, ws.process_duration });
-        }
-
-        std.log.warn("[StorageInspector] Total workstations found: {d}", .{count});
-    }
 
     // Count and log storages by type
     {

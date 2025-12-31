@@ -1,3 +1,4 @@
+// Water well prefab
 .{
     .components = .{
         .Position = .{ .x = 100, .y = 400 },
@@ -5,17 +6,6 @@
             .type = .circle,
             .radius = 30,
             .color = .{ .r = 50, .g = 100, .b = 200, .a = 255 },
-        },
-        .Workstation = .{
-            .process_duration = 60,
-            // Producer workstation: no input_storages (no EIS/IIS)
-            // Only has IOS and EOS - generates water
-            .output_storages = .{
-                .{ .components = .{ .Storage = .{ .storage_type = .ios, .initial_item = null } } },
-            },
-            .external_outputs = .{
-                .{ .components = .{ .Storage = .{ .storage_type = .eos, .initial_item = null } } },
-            },
         },
     },
 }

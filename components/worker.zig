@@ -1,21 +1,17 @@
-// Worker component for task engine integration
+// Worker component
 //
 // Attach to entities that can perform tasks (e.g., bakers, farmers, craftsmen).
-// The worker is already registered with the task engine in scene_before_load.
-// This component just associates the entity with a worker ID.
 
 const std = @import("std");
 const engine = @import("labelle-engine");
-const task_state = @import("task_state.zig");
 
-/// Worker component - attach to entities to define task engine workers
+/// Worker component - attach to entities that perform tasks
 pub const Worker = struct {
-    /// Unique ID for this worker (used by task engine)
-    id: u32,
+    /// Unique ID for this worker
+    id: u32 = 0,
 
     /// Called automatically when Worker component is added to an entity
     pub fn onAdd(payload: engine.ComponentPayload) void {
-        // Task engine temporarily disabled
         std.log.warn("[Worker.onAdd] Entity {d} - worker component attached", .{payload.entity_id});
     }
 
