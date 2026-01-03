@@ -11,6 +11,9 @@ const items = @import("items.zig");
 pub const ItemType = items.ItemType;
 pub const GameId = u64;
 
+// ECS interface type
+const EcsInterface = tasks.EcsInterface(GameId, ItemType);
+
 // Re-export tasks components for use in ComponentRegistry
 pub const Storage = tasks.Storage(ItemType);
 pub const Worker = tasks.Worker(ItemType);
@@ -163,6 +166,20 @@ pub fn setGame(game: *engine.Game) void {
     game_ptr = game;
 }
 
+/// Called by ecs_bridge to ensure context is set up before component operations.
+/// This is called from Workstation.onAdd with the game/registry from ComponentPayload.
+pub fn ensureContext(game_ptr_raw: *anyopaque, registry_ptr_raw: *anyopaque) void {
+    if (game_registry == null) {
+        game_registry = @ptrCast(@alignCast(registry_ptr_raw));
+    }
+    if (game_ptr == null) {
+        game_ptr = @ptrCast(@alignCast(game_ptr_raw));
+    }
+}
+
+// Custom vtable - will be populated at runtime from engine's vtable
+var custom_vtable: EcsInterface.VTable = undefined;
+
 /// Initialize the task engine
 pub fn init(allocator: std.mem.Allocator) !void {
     if (task_engine != null) return;
@@ -174,7 +191,18 @@ pub fn init(allocator: std.mem.Allocator) !void {
     task_engine = task_eng;
 
     // RFC #28: Connect tasks components to engine for auto-registration
-    tasks.setEngineInterface(GameId, ItemType, task_eng.interface());
+    // Create a custom interface that adds ensureContext callback
+    const engine_iface = task_eng.interface();
+
+    // Copy engine's vtable and add our ensureContext
+    custom_vtable = engine_iface.vtable.*;
+    custom_vtable.ensureContext = ensureContext;
+
+    const custom_iface = EcsInterface{
+        .ptr = engine_iface.ptr,
+        .vtable = &custom_vtable,
+    };
+    tasks.setEngineInterface(GameId, ItemType, custom_iface);
 
     std.log.info("[TaskState] Task engine initialized with auto-registration", .{});
 }

@@ -7,7 +7,9 @@
         },
         .Workstation = .{
             .process_duration = 120,
-            .external_input_storages = .{
+            // Nested storages - each Storage has its own role and will auto-attach
+            // to this workstation via parent reference (RFC #169)
+            .storages = .{
                 // EIS - Empty Flour storage (accepts dangling flour items)
                 .{
                     .components = .{

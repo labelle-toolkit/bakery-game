@@ -7,12 +7,10 @@
         },
         .Workstation = .{
             .process_duration = 60,
-            // Producer workstation: no input_storages (no EIS/IIS)
-            // Only has IOS and EOS - generates water
-            .output_storages = .{
+            // Producer workstation: no EIS/IIS inputs
+            // Storage roles determine workflow position
+            .storages = .{
                 .{ .components = .{ .Storage = .{ .role = .ios, .initial_item = null } } },
-            },
-            .external_outputs = .{
                 .{ .components = .{ .Storage = .{ .role = .eos, .initial_item = null } } },
             },
         },

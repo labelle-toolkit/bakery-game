@@ -5,14 +5,15 @@
 
 const std = @import("std");
 const engine = @import("labelle-engine");
+const labelle_tasks = @import("labelle-tasks");
 const task_state = @import("../components/task_state.zig");
-const workstation_mod = @import("../components/workstation.zig");
+const items = @import("../components/items.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
 const Storage = task_state.Storage;
 const StorageRole = task_state.StorageRole;
-const Workstation = workstation_mod.Workstation;
+const Workstation = labelle_tasks.Workstation(items.ItemType);
 
 var has_run = false;
 
@@ -44,10 +45,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         while (iter.next()) |entity| {
             const ws = view.getConst(entity);
             workstation_count += 1;
-            std.log.warn("[StorageInspector] Workstation entity={any}, process_duration={d}, external_input_storages={d}", .{
+            std.log.warn("[StorageInspector] Workstation entity={any}, process_duration={d}, storages={d}", .{
                 entity,
                 ws.process_duration,
-                ws.external_input_storages.len,
+                ws.storages.len,
             });
         }
     }
