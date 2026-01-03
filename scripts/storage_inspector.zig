@@ -5,14 +5,13 @@
 
 const std = @import("std");
 const engine = @import("labelle-engine");
-const storage_mod = @import("../components/storage.zig");
-const workstation_mod = @import("../components/workstation.zig");
 const task_state = @import("../components/task_state.zig");
+const workstation_mod = @import("../components/workstation.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
-const Storage = storage_mod.Storage;
-const StorageType = storage_mod.StorageType;
+const Storage = task_state.Storage;
+const StorageRole = task_state.StorageRole;
 const Workstation = workstation_mod.Workstation;
 
 var has_run = false;
@@ -65,7 +64,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         while (iter.next()) |entity| {
             const storage = view.getConst(entity);
 
-            switch (storage.storage_type) {
+            switch (storage.role) {
                 .eis => {
                     eis_count += 1;
                     std.log.warn("[StorageInspector] EIS entity={any}, initial_item={any}", .{ entity, storage.initial_item });

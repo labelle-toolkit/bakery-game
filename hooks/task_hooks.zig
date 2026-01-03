@@ -20,6 +20,18 @@ pub fn game_init(payload: engine.HookPayload) void {
     std.log.info("[TaskHooks] game_init: task engine ready", .{});
 }
 
+/// Re-evaluate dangling items after scene is loaded
+/// (all entities are now registered)
+pub fn scene_load(payload: engine.HookPayload) void {
+    const info = payload.scene_load;
+    std.log.info("[TaskHooks] scene_load: {s} - re-evaluating dangling items", .{info.name});
+
+    // Re-evaluate now that all entities (EIS, workers, dangling items) exist
+    if (task_state.getEngine()) |task_eng| {
+        task_eng.evaluateDanglingItems();
+    }
+}
+
 /// Clean up task engine on game deinit
 pub fn game_deinit(payload: engine.HookPayload) void {
     _ = payload;

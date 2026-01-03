@@ -104,7 +104,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         } else {
             // Move towards target using game.movePosition (auto-syncs to graphics)
             const move_dist = @min(target.speed * dt, dist);
-            game.movePosition(worker_entity, (dx / dist) * move_dist, (dy / dist) * move_dist);
+            const move_x = (dx / dist) * move_dist;
+            const move_y = (dy / dist) * move_dist;
+            game.movePosition(worker_entity, move_x, move_y);
         }
     }
 

@@ -7,12 +7,10 @@
 const std = @import("std");
 const engine = @import("labelle-engine");
 const task_state = @import("task_state.zig");
-const storage_mod = @import("storage.zig");
 
 const Entity = engine.Entity;
 const Game = engine.Game;
-const Storage = storage_mod.Storage;
-const StorageType = storage_mod.StorageType;
+const Storage = task_state.Storage;
 const StorageRole = task_state.StorageRole;
 
 /// Workstation component - attach to entities to define task engine workstations
@@ -81,15 +79,16 @@ pub const Workstation = struct {
                 ios_cnt: *usize,
                 eos: *[16]u64,
                 eos_cnt: *usize,
-                default_type: StorageType,
+                default_role: StorageRole,
             ) void {
                 const storage_id = engine.entityToU64(storage_entity);
 
-                // Get the Storage component to determine type and initial item
-                const storage_type = if (reg.tryGet(Storage, storage_entity)) |s| s.storage_type else default_type;
-                const initial_item = if (reg.tryGet(Storage, storage_entity)) |s| s.initial_item else null;
+                // Get the Storage component to determine role
+                // Storage auto-registers via onAdd callback (RFC #28)
+                const role = if (reg.tryGet(Storage, storage_entity)) |s| s.role else default_role;
 
-                switch (storage_type) {
+                // Workstation just needs to collect IDs for workstation config
+                switch (role) {
                     .eis => {
                         if (eis_cnt.* < eis.len) {
                             eis[eis_cnt.*] = storage_id;
@@ -115,22 +114,6 @@ pub const Workstation = struct {
                         }
                     },
                 }
-
-                // Convert StorageType to StorageRole
-                const role: StorageRole = switch (storage_type) {
-                    .eis => .eis,
-                    .iis => .iis,
-                    .ios => .ios,
-                    .eos => .eos,
-                };
-
-                // Register storage with task engine using StorageConfig
-                task_state.addStorage(storage_id, .{
-                    .role = role,
-                    .initial_item = initial_item,
-                }) catch |err| {
-                    std.log.err("[Workstation.onAdd] Failed to add storage {d}: {}", .{ storage_id, err });
-                };
             }
         }.call;
 

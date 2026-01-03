@@ -9,16 +9,13 @@
 const std = @import("std");
 const engine = @import("labelle-engine");
 const task_state = @import("../components/task_state.zig");
-const worker_mod = @import("../components/worker.zig");
-const dangling_item_mod = @import("../components/dangling_item.zig");
-const storage_mod = @import("../components/storage.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
 const Position = engine.render.Position;
-const Worker = worker_mod.Worker;
-const DanglingItem = dangling_item_mod.DanglingItem;
-const Storage = storage_mod.Storage;
+const Worker = task_state.Worker;
+const DanglingItem = task_state.DanglingItem;
+const Storage = task_state.Storage;
 
 var frame_count: u32 = 0;
 var test_passed: bool = false;
@@ -61,7 +58,7 @@ pub fn init(game: *Game, scene: *Scene) void {
         var iter = view.entityIterator();
         while (iter.next()) |entity| {
             const storage = view.getConst(entity);
-            if (storage.storage_type == .eis and storage.standalone and storage.accepts == .Flour) {
+            if (storage.role == .eis and storage.accepts == .Flour) {
                 initial_eis_id = engine.entityToU64(entity);
                 // Check if EIS is empty (it should be for this test)
                 if (storage.initial_item == null) {
