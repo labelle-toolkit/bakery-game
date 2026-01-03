@@ -9,7 +9,7 @@
 const std = @import("std");
 const engine = @import("labelle-engine");
 const labelle_tasks = @import("labelle-tasks");
-const task_hooks = @import("../hooks/task_hooks.zig");
+const main = @import("../main.zig");
 const items = @import("../enums/items.zig");
 
 const Game = engine.Game;
@@ -18,6 +18,7 @@ const Position = engine.render.Position;
 const Worker = labelle_tasks.Worker(items.ItemType);
 const DanglingItem = labelle_tasks.DanglingItem(items.ItemType);
 const Storage = labelle_tasks.Storage(items.ItemType);
+const Context = main.labelle_tasksContext;
 
 var frame_count: u32 = 0;
 var test_passed: bool = false;
@@ -96,7 +97,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     // Check every 10 frames
     if (frame_count % 10 != 0) return;
 
-    const task_eng = task_hooks.Context.getEngine() orelse return;
+    const task_eng = Context.getEngine() orelse return;
     const eis_id = initial_eis_id orelse return;
 
     // Check delivery state

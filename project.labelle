@@ -5,6 +5,7 @@
     .initial_scene = "main",
     .backend = .raylib,
     .ecs_backend = .zig_ecs,
+    .game_id = .u64,
     .window = .{
         .width = 1024,
         .height = 768,
@@ -22,6 +23,10 @@
             .path = "../../labelle-tasks",
             .bind = .{
                 .{ .func = "bind", .arg = "Items", .components = "Storage,Worker,DanglingItem,Workstation" },
+            },
+            .engine_hooks = .{
+                .create = "createEngineHooks",
+                .task_hooks = "task_hooks.GameHooks",
             },
         },
     },

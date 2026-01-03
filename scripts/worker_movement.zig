@@ -6,17 +6,19 @@
 
 const std = @import("std");
 const engine = @import("labelle-engine");
-const task_hooks = @import("../hooks/task_hooks.zig");
+const main = @import("../main.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
 const Position = engine.render.Position;
+const Context = main.labelle_tasksContext;
+const MovementAction = main.labelle_tasksMovementAction;
 
 const MovementTarget = struct {
     target_x: f32,
     target_y: f32,
     speed: f32,
-    action: task_hooks.MovementAction,
+    action: MovementAction,
 };
 
 var active_movements: std.AutoHashMap(u64, MovementTarget) = undefined;
@@ -49,8 +51,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     const registry = game.getRegistry();
 
     // Process pending movements from task_state (queued by hooks)
-    const pending = task_hooks.Context.takePendingMovements();
-    defer task_hooks.Context.freePendingMovements(pending);
+    const pending = Context.takePendingMovements();
+    defer Context.freePendingMovements(pending);
 
     for (pending) |movement| {
         active_movements.put(movement.worker_id, .{
@@ -96,8 +98,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             std.log.info("[WorkerMovement] Worker {d} arrived at target, action={}", .{ worker_id, target.action });
 
             switch (target.action) {
-                .pickup, .pickup_dangling => _ = task_hooks.Context.pickupCompleted(worker_id),
-                .store => _ = task_hooks.Context.storeCompleted(worker_id),
+                .pickup, .pickup_dangling => _ = Context.pickupCompleted(worker_id),
+                .store => _ = Context.storeCompleted(worker_id),
             }
 
             to_remove.append(script_allocator, worker_id) catch continue;

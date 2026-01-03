@@ -1,22 +1,22 @@
 // Task hooks for the bakery game
 //
-// Uses labelle-tasks.createEngineHooks to reduce boilerplate.
-// Game-specific hooks (store_started, pickup_dangling_started, item_delivered)
-// respond to task engine events and integrate with the game's visual/movement systems.
+// Game-specific task event handlers for labelle-tasks.
+// Engine hooks (game_init, scene_load, game_deinit) are automatically
+// provided by createEngineHooks via project.labelle configuration.
 
 const engine = @import("labelle-engine");
-const tasks = @import("labelle-tasks");
-const items = @import("../enums/items.zig");
 
-// === Type Definitions ===
+/// Get Context from main.zig (deferred to avoid circular import)
+fn getContext() type {
+    return @import("../main.zig").labelle_tasksContext;
+}
 
-pub const ItemType = items.ItemType;
-pub const GameId = u64;
-
-// === Game-Specific Task Hooks ===
-
-const GameHooks = struct {
+/// Game-specific task hooks for labelle-tasks integration.
+/// These handlers respond to task engine events and integrate
+/// with the game's visual/movement systems.
+pub const GameHooks = struct {
     pub fn store_started(payload: anytype) void {
+        const Context = getContext();
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
         const storage_entity = engine.entityFromU64(payload.storage_id);
@@ -26,6 +26,7 @@ const GameHooks = struct {
     }
 
     pub fn pickup_dangling_started(payload: anytype) void {
+        const Context = getContext();
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
         const item_entity = engine.entityFromU64(payload.item_id);
@@ -35,6 +36,7 @@ const GameHooks = struct {
     }
 
     pub fn item_delivered(payload: anytype) void {
+        const Context = getContext();
         const game = Context.getGame(engine.Game) orelse return;
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
@@ -51,17 +53,3 @@ const GameHooks = struct {
         game.setZIndex(item_entity, storage_z + 1);
     }
 };
-
-// === Task Engine Hooks ===
-
-const TaskHooks = tasks.createEngineHooks(GameId, ItemType, GameHooks);
-
-// Re-exports for scripts and other modules
-pub const Context = TaskHooks.Context;
-pub const MovementAction = TaskHooks.MovementAction;
-pub const PendingMovement = TaskHooks.PendingMovement;
-
-// Engine hooks (forwarded from TaskHooks)
-pub const game_init = TaskHooks.game_init;
-pub const scene_load = TaskHooks.scene_load;
-pub const game_deinit = TaskHooks.game_deinit;
