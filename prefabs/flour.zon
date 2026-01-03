@@ -1,9 +1,7 @@
 .{
     .components = .{
         .Shape = .{
-            .type = .rectangle,
-            .width = 20,
-            .height = 20,
+            .shape = .{ .rectangle = .{ .width = 20, .height = 20 } },
             .color = .{ .r = 255, .g = 255, .b = 200, .a = 255 },
         },
     },

@@ -1,8 +1,7 @@
 .{
     .components = .{
         .Shape = .{
-            .type = .circle,
-            .radius = 15,
+            .shape = .{ .circle = .{ .radius = 15 } },
             .color = .{ .r = 255, .g = 200, .b = 150, .a = 255 },
         },
         .Worker = .{},
