@@ -48,14 +48,25 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             const worker_id = engine.entityToU64(entity);
             std.log.info("[WorkerMovement] Worker {d} arrived at target, action={}", .{ worker_id, target.action });
 
-            // Notify task engine
+            // Save old target for comparison
+            const old_target_x = target.target_x;
+            const old_target_y = target.target_y;
+
+            // Notify task engine (hooks may set a new MovementTarget)
             switch (target.action) {
-                .pickup, .pickup_dangling => _ = Context.pickupCompleted(worker_id),
+                .pickup => _ = Context.pickupCompleted(worker_id),
+                .pickup_dangling => _ = Context.danglingPickupCompleted(worker_id),
                 .store => _ = Context.storeCompleted(worker_id),
             }
 
-            // Remove the MovementTarget component
-            registry.remove(MovementTarget, entity);
+            // Only remove MovementTarget if no new target was set by hooks
+            if (registry.tryGet(MovementTarget, entity)) |new_target| {
+                if (new_target.target_x == old_target_x and new_target.target_y == old_target_y) {
+                    // Same target position - task complete, remove component
+                    registry.remove(MovementTarget, entity);
+                }
+                // else: new target was set by hook, keep it
+            }
         } else {
             // Move towards target
             const move_dist = @min(target.speed * dt, dist);

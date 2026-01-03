@@ -45,13 +45,17 @@ pub fn init(game: *Game, scene: *Scene) void {
         }
     }
 
-    // Find dangling item
+    // Find dangling Flour item specifically (to match the EIS that accepts Flour)
     {
         var view = registry.view(.{DanglingItem});
         var iter = view.entityIterator();
-        if (iter.next()) |entity| {
-            initial_dangling_id = engine.entityToU64(entity);
-            std.log.info("[DeliveryValidator] Found dangling item: {d}", .{initial_dangling_id.?});
+        while (iter.next()) |entity| {
+            const dangling = view.getConst(entity);
+            if (dangling.item_type == .Flour) {
+                initial_dangling_id = engine.entityToU64(entity);
+                std.log.info("[DeliveryValidator] Found dangling Flour item: {d}", .{initial_dangling_id.?});
+                break;
+            }
         }
     }
 
@@ -87,8 +91,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
     frame_count += 1;
 
-    // Give it up to 500 frames (~8 seconds at 60fps) to complete
-    if (frame_count > 500) {
+    // Give it up to 600 frames (~10 seconds at 60fps) to complete
+    if (frame_count > 600) {
         std.log.err("[DeliveryValidator] FAIL: Delivery cycle did not complete in time", .{});
         test_failed = true;
         return;

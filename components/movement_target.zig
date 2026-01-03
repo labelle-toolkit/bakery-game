@@ -15,6 +15,6 @@ pub const Action = enum {
 pub const MovementTarget = struct {
     target_x: f32,
     target_y: f32,
-    speed: f32 = 60.0, // pixels per second
+    speed: f32 = 200.0, // pixels per second
     action: Action,
 };
