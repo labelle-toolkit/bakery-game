@@ -49,8 +49,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     const registry = game.getRegistry();
 
     // Process pending movements from task_state (queued by hooks)
-    const pending = task_state.takePendingMovements();
-    defer task_state.freePendingMovements(pending);
+    const pending = task_state.Context.takePendingMovements();
+    defer task_state.Context.freePendingMovements(pending);
 
     for (pending) |movement| {
         active_movements.put(movement.worker_id, .{
@@ -96,8 +96,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             std.log.info("[WorkerMovement] Worker {d} arrived at target, action={}", .{ worker_id, target.action });
 
             switch (target.action) {
-                .pickup, .pickup_dangling => _ = task_state.pickupCompleted(worker_id),
-                .store => _ = task_state.storeCompleted(worker_id),
+                .pickup, .pickup_dangling => _ = task_state.Context.pickupCompleted(worker_id),
+                .store => _ = task_state.Context.storeCompleted(worker_id),
             }
 
             to_remove.append(script_allocator, worker_id) catch continue;

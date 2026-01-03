@@ -141,8 +141,8 @@ pub const TaskState = struct {
     _unused: u8 = 0,
 };
 
-/// Distance function for spatial queries
-fn getEntityDistance(from_id: GameId, to_id: GameId) ?f32 {
+/// Distance function for spatial queries (passed to Context.init)
+pub fn getEntityDistance(from_id: GameId, to_id: GameId) ?f32 {
     const registry = Context.getRegistry(engine.Registry) orelse return null;
     const Position = engine.render.Position;
 
@@ -152,44 +152,4 @@ fn getEntityDistance(from_id: GameId, to_id: GameId) ?f32 {
     const dx = to_pos.x - from_pos.x;
     const dy = to_pos.y - from_pos.y;
     return @sqrt(dx * dx + dy * dy);
-}
-
-// ============================================
-// Public API (delegates to Context)
-// ============================================
-
-pub fn init(allocator: std.mem.Allocator) !void {
-    try Context.init(allocator, getEntityDistance);
-}
-
-pub fn deinit() void {
-    Context.deinit();
-}
-
-pub fn getEngine() ?*TaskEngine {
-    return Context.getEngine();
-}
-
-pub fn getRegistry() ?*engine.Registry {
-    return Context.getRegistry(engine.Registry);
-}
-
-pub fn pickupCompleted(worker_id: GameId) bool {
-    return Context.pickupCompleted(worker_id);
-}
-
-pub fn storeCompleted(worker_id: GameId) bool {
-    return Context.storeCompleted(worker_id);
-}
-
-pub fn queueMovement(worker_id: GameId, target_x: f32, target_y: f32, action: MovementAction) void {
-    Context.queueMovement(worker_id, target_x, target_y, action);
-}
-
-pub fn takePendingMovements() []PendingMovement {
-    return Context.takePendingMovements();
-}
-
-pub fn freePendingMovements(slice: []PendingMovement) void {
-    Context.freePendingMovements(slice);
 }

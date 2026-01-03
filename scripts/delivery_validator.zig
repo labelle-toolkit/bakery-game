@@ -94,7 +94,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     // Check every 10 frames
     if (frame_count % 10 != 0) return;
 
-    const task_eng = task_state.getEngine() orelse return;
+    const task_eng = task_state.Context.getEngine() orelse return;
     const eis_id = initial_eis_id orelse return;
 
     // Check delivery state
