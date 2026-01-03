@@ -5,14 +5,13 @@
 // provided by createEngineHooks via project.labelle configuration.
 //
 // Hook payloads are enriched with .registry and .game pointers,
-// so handlers can access the ECS directly without going through Context.
+// so handlers can access the ECS directly.
 
 const engine = @import("labelle-engine");
+const movement_target = @import("../components/movement_target.zig");
 
-/// Get Context from main.zig (for queueMovement)
-fn getContext() type {
-    return @import("../main.zig").labelle_tasksContext;
-}
+const MovementTarget = movement_target.MovementTarget;
+const Action = movement_target.Action;
 
 /// Game-specific task hooks for labelle-tasks integration.
 /// These handlers respond to task engine events and integrate
@@ -26,21 +25,33 @@ pub const GameHooks = struct {
     pub fn store_started(payload: anytype) void {
         const registry = payload.registry orelse return;
         const Position = engine.render.Position;
+
         const storage_entity = engine.entityFromU64(payload.storage_id);
         const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
 
-        const Context = getContext();
-        Context.queueMovement(payload.worker_id, storage_pos.x, storage_pos.y, .store);
+        // Set MovementTarget component on the worker
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, MovementTarget{
+            .target_x = storage_pos.x,
+            .target_y = storage_pos.y,
+            .action = .store,
+        });
     }
 
     pub fn pickup_dangling_started(payload: anytype) void {
         const registry = payload.registry orelse return;
         const Position = engine.render.Position;
+
         const item_entity = engine.entityFromU64(payload.item_id);
         const item_pos = registry.tryGet(Position, item_entity) orelse return;
 
-        const Context = getContext();
-        Context.queueMovement(payload.worker_id, item_pos.x, item_pos.y, .pickup_dangling);
+        // Set MovementTarget component on the worker
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, MovementTarget{
+            .target_x = item_pos.x,
+            .target_y = item_pos.y,
+            .action = .pickup_dangling,
+        });
     }
 
     pub fn item_delivered(payload: anytype) void {
