@@ -2,9 +2,8 @@
 //
 // Uses labelle-tasks.createEngineHooks to reduce boilerplate.
 // Game-specific hooks (store_started, pickup_dangling_started, item_delivered)
-// and the distance function remain in this file.
+// respond to task engine events and integrate with the game's visual/movement systems.
 
-const std = @import("std");
 const engine = @import("labelle-engine");
 const tasks = @import("labelle-tasks");
 const items = @import("../enums/items.zig");
@@ -15,13 +14,9 @@ pub const ItemType = items.ItemType;
 pub const GameId = u64;
 
 // === Game-Specific Task Hooks ===
-//
-// These hooks respond to task engine events and integrate with the game's
-// visual/movement systems. They are merged with LoggingHooks automatically.
 
 const GameHooks = struct {
     pub fn store_started(payload: anytype) void {
-        // Queue movement to storage
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
         const storage_entity = engine.entityFromU64(payload.storage_id);
@@ -31,7 +26,6 @@ const GameHooks = struct {
     }
 
     pub fn pickup_dangling_started(payload: anytype) void {
-        // Queue movement to dangling item
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
         const item_entity = engine.entityFromU64(payload.item_id);
@@ -41,7 +35,6 @@ const GameHooks = struct {
     }
 
     pub fn item_delivered(payload: anytype) void {
-        // Move the item visual to the storage position
         const game = Context.getGame(engine.Game) orelse return;
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
@@ -59,25 +52,9 @@ const GameHooks = struct {
     }
 };
 
-/// Distance function for spatial queries (used by task engine for finding nearest entities)
-fn getEntityDistance(from_id: GameId, to_id: GameId) ?f32 {
-    const registry = Context.getRegistry(engine.Registry) orelse return null;
-    const Position = engine.render.Position;
-
-    const from_pos = registry.tryGet(Position, engine.entityFromU64(from_id)) orelse return null;
-    const to_pos = registry.tryGet(Position, engine.entityFromU64(to_id)) orelse return null;
-
-    const dx = to_pos.x - from_pos.x;
-    const dy = to_pos.y - from_pos.y;
-    return @sqrt(dx * dx + dy * dy);
-}
-
 // === Task Engine Hooks ===
-//
-// createEngineHooks provides game_init, scene_load, game_deinit hooks
-// and the Context type for accessing the task engine.
 
-const TaskHooks = tasks.createEngineHooks(GameId, ItemType, GameHooks, getEntityDistance);
+const TaskHooks = tasks.createEngineHooks(GameId, ItemType, GameHooks);
 
 // Re-exports for scripts and other modules
 pub const Context = TaskHooks.Context;
