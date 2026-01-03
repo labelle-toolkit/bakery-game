@@ -6,13 +6,13 @@
 const std = @import("std");
 const engine = @import("labelle-engine");
 const labelle_tasks = @import("labelle-tasks");
-const task_state = @import("../components/task_state.zig");
-const items = @import("../components/items.zig");
+const task_hooks = @import("../hooks/task_hooks.zig");
+const items = @import("../enums/items.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
-const Storage = task_state.Storage;
-const StorageRole = task_state.StorageRole;
+const Storage = labelle_tasks.Storage(items.ItemType);
+const StorageRole = labelle_tasks.StorageRole;
 const Workstation = labelle_tasks.Workstation(items.ItemType);
 
 var has_run = false;
@@ -90,7 +90,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     std.log.warn("[StorageInspector] Total storages - EIS:{d}, IIS:{d}, IOS:{d}, EOS:{d}", .{ eis_count, iis_count, ios_count, eos_count });
 
     // Validate task engine integration
-    if (task_state.Context.getEngine()) |_| {
+    if (task_hooks.Context.getEngine()) |_| {
         std.log.info("[StorageInspector] PASS: Task engine is initialized", .{});
 
         // Validate by checking a workstation's status in the task engine
@@ -99,7 +99,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             var iter = view.entityIterator();
             if (iter.next()) |entity| {
                 const ws_id = engine.entityToU64(entity);
-                if (task_state.Context.getEngine()) |task_engine| {
+                if (task_hooks.Context.getEngine()) |task_engine| {
                     if (task_engine.getWorkstationStatus(ws_id)) |status| {
                         std.log.info("[StorageInspector] PASS: Workstation {d} registered with status={any}", .{ ws_id, status });
                     } else {
