@@ -17,35 +17,9 @@ pub const Worker = tasks.Worker(ItemType);
 pub const DanglingItem = tasks.DanglingItem(ItemType);
 pub const StorageRole = tasks.StorageRole;
 
-// Hook receiver for task engine events (game-specific behavior)
-pub const BakeryTaskHooks = struct {
-    pub fn process_completed(payload: anytype) void {
-        std.log.info("[TaskEngine] process_completed: workstation={d}, worker={d}", .{
-            payload.workstation_id,
-            payload.worker_id,
-        });
-    }
-
-    pub fn cycle_completed(payload: anytype) void {
-        std.log.info("[TaskEngine] cycle_completed: workstation={d}, cycles={d}", .{
-            payload.workstation_id,
-            payload.cycles_completed,
-        });
-    }
-
-    pub fn pickup_started(payload: anytype) void {
-        std.log.info("[TaskEngine] pickup_started: worker={d}, storage={d}", .{
-            payload.worker_id,
-            payload.storage_id,
-        });
-    }
-
+// Game-specific hooks (only hooks with actual game logic)
+const GameHooks = struct {
     pub fn store_started(payload: anytype) void {
-        std.log.info("[TaskEngine] store_started: worker={d}, storage={d}", .{
-            payload.worker_id,
-            payload.storage_id,
-        });
-
         // Queue movement to storage
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
@@ -55,45 +29,7 @@ pub const BakeryTaskHooks = struct {
         Context.queueMovement(payload.worker_id, storage_pos.x, storage_pos.y, .store);
     }
 
-    pub fn worker_assigned(payload: anytype) void {
-        std.log.info("[TaskEngine] worker_assigned: worker={d}, workstation={d}", .{
-            payload.worker_id,
-            payload.workstation_id,
-        });
-    }
-
-    pub fn worker_released(payload: anytype) void {
-        std.log.info("[TaskEngine] worker_released: worker={d}", .{
-            payload.worker_id,
-        });
-    }
-
-    pub fn workstation_queued(payload: anytype) void {
-        std.log.info("[TaskEngine] workstation_queued: workstation={d}", .{
-            payload.workstation_id,
-        });
-    }
-
-    pub fn workstation_blocked(payload: anytype) void {
-        std.log.info("[TaskEngine] workstation_blocked: workstation={d}", .{
-            payload.workstation_id,
-        });
-    }
-
-    pub fn workstation_activated(payload: anytype) void {
-        std.log.info("[TaskEngine] workstation_activated: workstation={d}", .{
-            payload.workstation_id,
-        });
-    }
-
     pub fn pickup_dangling_started(payload: anytype) void {
-        std.log.info("[TaskEngine] pickup_dangling_started: worker={d}, item={d}, item_type={}, target_eis={d}", .{
-            payload.worker_id,
-            payload.item_id,
-            payload.item_type,
-            payload.target_eis_id,
-        });
-
         // Queue movement to dangling item
         const registry = Context.getRegistry(engine.Registry) orelse return;
         const Position = engine.render.Position;
@@ -104,12 +40,6 @@ pub const BakeryTaskHooks = struct {
     }
 
     pub fn item_delivered(payload: anytype) void {
-        std.log.info("[TaskEngine] item_delivered: worker={d}, item={d}, storage={d}", .{
-            payload.worker_id,
-            payload.item_id,
-            payload.storage_id,
-        });
-
         // Move the item visual to the storage position
         const game = Context.getGame(engine.Game) orelse return;
         const registry = Context.getRegistry(engine.Registry) orelse return;
@@ -127,6 +57,9 @@ pub const BakeryTaskHooks = struct {
         game.setZIndex(item_entity, storage_z + 1);
     }
 };
+
+// Merge game hooks with default logging (game hooks take precedence)
+pub const BakeryTaskHooks = tasks.MergeHooks(GameHooks, tasks.LoggingHooks);
 
 // Use TaskEngineContext for lifecycle and state management
 pub const Context = tasks.TaskEngineContext(GameId, ItemType, BakeryTaskHooks);
