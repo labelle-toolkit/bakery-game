@@ -96,8 +96,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             std.log.info("[WorkerMovement] Worker {d} arrived at target, action={}", .{ worker_id, target.action });
 
             switch (target.action) {
-                .pickup_dangling => _ = task_state.pickupCompleted(worker_id),
-                .store_to_eis => _ = task_state.storeCompleted(worker_id),
+                .pickup, .pickup_dangling => _ = task_state.pickupCompleted(worker_id),
+                .store => _ = task_state.storeCompleted(worker_id),
             }
 
             to_remove.append(script_allocator, worker_id) catch continue;
