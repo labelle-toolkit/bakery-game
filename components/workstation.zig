@@ -1,8 +1,8 @@
 // Workstation component for task engine integration
 //
 // Attach to entities that process items (e.g., ovens, forges, looms).
-// Uses onAdd callback to register the workstation and its storages
-// with the task engine.
+// Uses onReady callback (RFC #169) to register the workstation and its storages
+// with the task engine after the entire hierarchy is complete.
 
 const std = @import("std");
 const engine = @import("labelle-engine");
@@ -28,10 +28,12 @@ pub const Workstation = struct {
     /// External Output Storages (EOS) - final output storages
     external_outputs: []const Entity = &.{},
 
-    /// Called automatically when Workstation component is added to an entity
-    pub fn onAdd(payload: engine.ComponentPayload) void {
+    /// Called after the entire entity hierarchy is complete (RFC #169).
+    /// At this point, all nested storage entities have been created and
+    /// the storage arrays are fully populated.
+    pub fn onReady(payload: engine.ComponentPayload) void {
         const entity_id = payload.entity_id;
-        std.log.warn("[Workstation.onAdd] Entity {d} - workstation added", .{entity_id});
+        std.log.info("[Workstation.onReady] Entity {d} - hierarchy complete, registering", .{entity_id});
 
         // Access the game and registry to query component data
         const game = payload.getGame(Game);
@@ -44,12 +46,12 @@ pub const Workstation = struct {
         // Get the Workstation component to access configuration
         const ws_entity = engine.entityFromU64(entity_id);
         const ws = registry.tryGet(Workstation, ws_entity) orelse {
-            std.log.err("[Workstation.onAdd] Entity {d} - could not get Workstation component", .{entity_id});
+            std.log.err("[Workstation.onReady] Entity {d} - could not get Workstation component", .{entity_id});
             return;
         };
 
-        std.log.warn("[Workstation.onAdd] Entity {d} - process_duration: {d}", .{ entity_id, ws.process_duration });
-        std.log.warn("[Workstation.onAdd] Entity {d} - external_input_storages: {d}, output_storages: {d}, external_outputs: {d}", .{
+        std.log.warn("[Workstation.onReady] Entity {d} - process_duration: {d}", .{ entity_id, ws.process_duration });
+        std.log.warn("[Workstation.onReady] Entity {d} - external_input_storages: {d}, output_storages: {d}, external_outputs: {d}", .{
             entity_id,
             ws.external_input_storages.len,
             ws.output_storages.len,
@@ -139,11 +141,11 @@ pub const Workstation = struct {
             .ios = ios_ids[0..ios_count],
             .eos = eos_ids[0..eos_count],
         }) catch |err| {
-            std.log.err("[Workstation.onAdd] Failed to add workstation {d}: {}", .{ entity_id, err });
+            std.log.err("[Workstation.onReady] Failed to add workstation {d}: {}", .{ entity_id, err });
             return;
         };
 
-        std.log.info("[Workstation.onAdd] Entity {d} - registered with task engine (eis={d}, iis={d}, ios={d}, eos={d})", .{
+        std.log.info("[Workstation.onReady] Entity {d} - registered with task engine (eis={d}, iis={d}, ios={d}, eos={d})", .{
             entity_id,
             eis_count,
             iis_count,
