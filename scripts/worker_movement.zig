@@ -52,12 +52,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             const old_target_x = target.target_x;
             const old_target_y = target.target_y;
 
-            // Notify task engine (hooks may set a new MovementTarget)
-            switch (target.action) {
-                .pickup => _ = Context.pickupCompleted(worker_id),
-                .pickup_dangling => _ = Context.danglingPickupCompleted(worker_id),
-                .store => _ = Context.storeCompleted(worker_id),
-            }
+            // All arrivals go through worker_arrived - engine determines next step
+            // based on MovingTo state and workstation priority logic (FLUSH/PRODUCE/PICKUP)
+            _ = Context.workerArrived(worker_id);
 
             // Only remove MovementTarget if no new target was set by hooks
             if (registry.tryGet(MovementTarget, entity)) |new_target| {

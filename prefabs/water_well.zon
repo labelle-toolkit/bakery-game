@@ -10,8 +10,8 @@
             // Producer workstation: no EIS/IIS inputs
             // Storage roles determine workflow position
             .storages = .{
-                .{ .components = .{ .Storage = .{ .role = .ios, .initial_item = null } } },
-                .{ .components = .{ .Storage = .{ .role = .eos, .initial_item = null } } },
+                .{ .components = .{ .Storage = .{ .role = .ios, .initial_item = null, .accepts = .Water } } },
+                .{ .components = .{ .Storage = .{ .role = .eos, .initial_item = null, .accepts = .Water } } },
             },
         },
     },

@@ -7,11 +7,23 @@
 // Hook payloads are enriched with .registry and .game pointers,
 // so handlers can access the ECS directly.
 
+const std = @import("std");
+const log = std.log.scoped(.task_hooks);
 const engine = @import("labelle-engine");
+const labelle_tasks = @import("labelle-tasks");
 const movement_target = @import("../components/movement_target.zig");
+const work_progress = @import("../components/work_progress.zig");
+const items = @import("../enums/items.zig");
 
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
+const WorkProgress = work_progress.WorkProgress;
+const BoundTypes = labelle_tasks.bind(items.Items);
+const Workstation = BoundTypes.Workstation;
+const Storage = BoundTypes.Storage;
+const Items = items.Items;
+const main = @import("../main.zig");
+const Context = main.labelle_tasksContext;
 
 /// Game-specific task hooks for labelle-tasks integration.
 /// These handlers respond to task engine events and integrate
@@ -22,6 +34,56 @@ const Action = movement_target.Action;
 /// - .registry: ?*engine.Registry
 /// - .game: ?*engine.Game
 pub const GameHooks = struct {
+    /// Handle worker starting movement to workstation (initial assignment).
+    /// Only handles workstation arrival - storage movements are handled by
+    /// pickup_started and store_started hooks.
+    pub fn movement_started(payload: anytype) void {
+        const tasks = @import("labelle-tasks");
+        log.info("movement_started: worker={d} target={d} type={s}", .{
+            payload.worker_id,
+            payload.target,
+            @tagName(payload.target_type),
+        });
+
+        // Only handle workstation arrival
+        if (payload.target_type != tasks.TargetType.workstation) return;
+
+        const registry = payload.registry orelse return;
+        const Position = engine.render.Position;
+
+        const target_entity = engine.entityFromU64(payload.target);
+        const target_pos = registry.tryGet(Position, target_entity) orelse return;
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        log.info("movement_started: setting MovementTarget for worker to workstation {d} at ({d},{d})", .{
+            payload.target,
+            target_pos.x,
+            target_pos.y,
+        });
+        registry.set(worker_entity, MovementTarget{
+            .target_x = target_pos.x,
+            .target_y = target_pos.y,
+            .action = .arrive_at_workstation,
+        });
+    }
+
+    /// Handle worker starting pickup from EIS.
+    pub fn pickup_started(payload: anytype) void {
+        log.info("pickup_started: worker={d} storage={d}", .{ payload.worker_id, payload.storage_id });
+        const registry = payload.registry orelse return;
+        const Position = engine.render.Position;
+
+        const storage_entity = engine.entityFromU64(payload.storage_id);
+        const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, MovementTarget{
+            .target_x = storage_pos.x,
+            .target_y = storage_pos.y,
+            .action = .pickup,
+        });
+    }
+
     pub fn store_started(payload: anytype) void {
         const registry = payload.registry orelse return;
         const Position = engine.render.Position;
@@ -54,6 +116,29 @@ pub const GameHooks = struct {
         });
     }
 
+    /// Handle worker starting transport from EOS to EIS.
+    pub fn transport_started(payload: anytype) void {
+        const registry = payload.registry orelse return;
+        const Position = engine.render.Position;
+
+        const from_entity = engine.entityFromU64(payload.from_storage_id);
+        const from_pos = registry.tryGet(Position, from_entity) orelse return;
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, MovementTarget{
+            .target_x = from_pos.x,
+            .target_y = from_pos.y,
+            .action = .transport_pickup,
+        });
+
+        log.info("transport_started: worker={d} from={d} to={d} item={s}", .{
+            payload.worker_id,
+            payload.from_storage_id,
+            payload.to_storage_id,
+            @tagName(payload.item),
+        });
+    }
+
     pub fn item_delivered(payload: anytype) void {
         const registry = payload.registry orelse return;
         const game = payload.game orelse return;
@@ -69,5 +154,59 @@ pub const GameHooks = struct {
 
         const storage_z = if (registry.tryGet(Shape, storage_entity)) |s| s.z_index else 128;
         game.setZIndex(item_entity, storage_z + 1);
+    }
+
+    /// Handle worker starting to process at a workstation.
+    /// Sets up WorkProgress component to track work time.
+    pub fn process_started(payload: anytype) void {
+        const registry = payload.registry orelse return;
+
+        const ws_entity = engine.entityFromU64(payload.workstation_id);
+        const workstation = registry.tryGet(Workstation, ws_entity) orelse {
+            log.err("process_started: workstation {d} has no Workstation component", .{payload.workstation_id});
+            return;
+        };
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, WorkProgress{
+            .workstation_id = payload.workstation_id,
+            .duration = workstation.process_duration,
+        });
+
+        log.info("process_started: worker={d} workstation={d} duration={d}", .{
+            payload.worker_id,
+            payload.workstation_id,
+            workstation.process_duration,
+        });
+    }
+
+    /// Handle work completion at a workstation.
+    /// For producer workstations (no IIS inputs), this creates the output item
+    /// and notifies the engine so it can proceed with the store step.
+    pub fn process_completed(payload: anytype) void {
+        const registry = payload.registry orelse return;
+
+        const ws_entity = engine.entityFromU64(payload.workstation_id);
+        const workstation = registry.tryGet(Workstation, ws_entity) orelse {
+            log.err("process_completed: workstation {d} has no Workstation component", .{payload.workstation_id});
+            return;
+        };
+
+        // Find IOS storage and set output item based on what the IOS accepts
+        for (workstation.storages) |storage_entity| {
+            const storage = registry.tryGet(Storage, storage_entity) orelse continue;
+            if (storage.role == .ios) {
+                const output_item = storage.accepts orelse continue;
+                const storage_id = engine.entityToU64(storage_entity);
+                _ = Context.itemAdded(storage_id, output_item);
+                log.info("process_completed: set IOS {d} item to {s}", .{ storage_id, @tagName(output_item) });
+                break;
+            }
+        }
+
+        log.info("process_completed: workstation={d} worker={d}", .{
+            payload.workstation_id,
+            payload.worker_id,
+        });
     }
 };

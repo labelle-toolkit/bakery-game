@@ -84,6 +84,7 @@ pub fn init(game: *Game, scene: *Scene) void {
 }
 
 pub fn update(game: *Game, scene: *Scene, dt: f32) void {
+    _ = game;
     _ = scene;
     _ = dt;
 
@@ -122,8 +123,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         std.log.info("[DeliveryValidator]   - Dangling item {d} removed from tracking", .{dangling_id});
         test_passed = true;
 
-        // Exit the game after successful validation
-        game.quit();
+        // Don't exit - let the game continue to test workstation workflows
+        // game.quit();
     }
 }
 

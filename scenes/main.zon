@@ -1,6 +1,6 @@
 .{
     .name = "main",
-    .scripts = .{ "storage_inspector", "worker_movement", "delivery_validator", "camera_control" },
+    .scripts = .{ "storage_inspector", "worker_movement", "delivery_validator", "camera_control", "work_processor" },
     .entities = .{
         // Baker (Worker) - will pick up dangling items
         .{
