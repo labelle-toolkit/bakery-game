@@ -105,5 +105,6 @@
     },
     .gizmos = .{
         .Text = .{ .text = "Oven", .size = 14, .y = -40, .color = .{ .r = 255, .g = 100, .b = 100, .a = 255 } },
+        .BoundingBox = .{ .color = .{ .r = 200, .g = 80, .b = 50, .a = 180 }, .padding = 4 },
     },
 }

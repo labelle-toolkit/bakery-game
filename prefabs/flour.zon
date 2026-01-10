@@ -5,4 +5,8 @@
             .color = .{ .r = 255, .g = 255, .b = 200, .a = 255 },
         },
     },
+    .gizmos = .{
+        .Text = .{ .text = "Flour", .size = 10, .y = -15, .color = .{ .r = 255, .g = 255, .b = 200, .a = 255 } },
+        .BoundingBox = .{ .color = .{ .r = 255, .g = 255, .b = 100, .a = 150 }, .padding = 2 },
+    },
 }

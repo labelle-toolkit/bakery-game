@@ -9,5 +9,6 @@
     .gizmos = .{
         .Text = .{ .text = "Baker", .size = 12, .y = -25, .color = .{ .r = 255, .g = 255, .b = 0, .a = 255 } },
         .Shape = .{ .shape = .{ .circle = .{ .radius = 3 } }, .color = .{ .r = 255, .g = 0, .b = 0, .a = 255 } },
+        .BoundingBox = .{ .color = .{ .r = 255, .g = 200, .b = 150, .a = 180 }, .padding = 3 },
     },
 }
