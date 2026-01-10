@@ -139,6 +139,8 @@ pub const GameHooks = struct {
         });
     }
 
+    var delivery_counter: u32 = 0;
+
     pub fn item_delivered(payload: anytype) void {
         const registry = payload.registry orelse return;
         const game = payload.game orelse return;
@@ -154,6 +156,13 @@ pub const GameHooks = struct {
 
         const storage_z = if (registry.tryGet(Shape, storage_entity)) |s| s.z_index else 128;
         game.setZIndex(item_entity, storage_z + 1);
+
+        // Take screenshot on delivery
+        delivery_counter += 1;
+        var buf: [64]u8 = undefined;
+        const filename = std.fmt.bufPrintZ(&buf, "delivery-{d:0>4}.png", .{delivery_counter}) catch "delivery.png";
+        game.takeScreenshot(filename);
+        log.info("item_delivered: screenshot saved as {s}", .{filename});
     }
 
     /// Handle worker starting to process at a workstation.
