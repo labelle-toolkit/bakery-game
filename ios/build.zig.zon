@@ -6,9 +6,6 @@
         .@"labelle-engine" = .{
             .path = "../../labelle-engine",
         },
-        .@"labelle-gfx" = .{
-            .path = "../../labelle-gfx",
-        },
         .@"labelle-tasks" = .{
             .path = "../../labelle-tasks",
         },

@@ -1,4 +1,4 @@
-// !UTF8*
+// !$*UTF8*$!
 {
 	archiveVersion = 1;
 	classes = {
@@ -9,9 +9,9 @@
 /* Begin PBXBuildFile section */
 		134D49EED4CB4954B926724D /* BakeryGame in CopyFiles */ = {isa = PBXBuildFile; fileRef = 50C473FDA731433EAFB8CE86 /* BakeryGame */; };
 		3D97C03BFA4F428DB6A7FE77 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4668C6DADBDE4D469196617F /* LaunchScreen.storyboard */; };
-		F004C0E14F6942E3B77451AA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9CE2F8444A1C456786466E3F /* Assets.xcassets */; };
-		BFAC64B7B1984E38A7A525F2 /* resources in Resources */ = {isa = PBXBuildFile; fileRef = 212DCC71787B47748E37EAFC /* resources */; };
 		6DB3B87C75104E4182F1E5D0 /* project.labelle in Resources */ = {isa = PBXBuildFile; fileRef = 61919567F79F445785F1405D /* project.labelle */; };
+		BFAC64B7B1984E38A7A525F2 /* resources in Resources */ = {isa = PBXBuildFile; fileRef = 212DCC71787B47748E37EAFC /* resources */; };
+		F004C0E14F6942E3B77451AA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9CE2F8444A1C456786466E3F /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -28,13 +28,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		3946D7AFB4A440FE986D2755 /* BakeryGame.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BakeryGame.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		50C473FDA731433EAFB8CE86 /* BakeryGame */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = "BakeryGame"; sourceTree = "<group>"; };
-		6107AC790AB44914AD995A7F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		4668C6DADBDE4D469196617F /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
-		9CE2F8444A1C456786466E3F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		212DCC71787B47748E37EAFC /* resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = resources; sourceTree = "<group>"; };
+		3946D7AFB4A440FE986D2755 /* BakeryGame.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BakeryGame.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4668C6DADBDE4D469196617F /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		50C473FDA731433EAFB8CE86 /* BakeryGame */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = BakeryGame; sourceTree = "<group>"; };
+		6107AC790AB44914AD995A7F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		61919567F79F445785F1405D /* project.labelle */ = {isa = PBXFileReference; lastKnownFileType = text; path = project.labelle; sourceTree = "<group>"; };
+		9CE2F8444A1C456786466E3F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -44,6 +44,14 @@
 				EA6B1E0F1D7640A8AB7B53D7 /* BakeryGame */,
 				BFAB6697AED9470BAE5E4384 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		BFAB6697AED9470BAE5E4384 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3946D7AFB4A440FE986D2755 /* BakeryGame.app */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 		EA6B1E0F1D7640A8AB7B53D7 /* BakeryGame */ = {
@@ -56,15 +64,7 @@
 				212DCC71787B47748E37EAFC /* resources */,
 				61919567F79F445785F1405D /* project.labelle */,
 			);
-			path = "BakeryGame";
-			sourceTree = "<group>";
-		};
-		BFAB6697AED9470BAE5E4384 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				3946D7AFB4A440FE986D2755 /* BakeryGame.app */,
-			);
-			name = Products;
+			path = BakeryGame;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -81,8 +81,8 @@
 			);
 			dependencies = (
 			);
-			name = "BakeryGame";
-			productName = "BakeryGame";
+			name = BakeryGame;
+			productName = BakeryGame;
 			productReference = 3946D7AFB4A440FE986D2755 /* BakeryGame.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -133,6 +133,29 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		02D3A83753664D96A1D43F66 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = BJAYB682J7;
+				INFOPLIST_FILE = BakeryGame/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.labelle.bakery;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		45F5239AB1E448FBA1BFDDE8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -191,6 +214,29 @@
 			};
 			name = Debug;
 		};
+		76475D53C06D45EFA729A0F6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = BJAYB682J7;
+				INFOPLIST_FILE = BakeryGame/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.labelle.bakery;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		7E8C125645504E95B560BE4A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -240,52 +286,6 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		76475D53C06D45EFA729A0F6 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				
-				INFOPLIST_FILE = "BakeryGame/Info.plist";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.labelle.bakery";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		02D3A83753664D96A1D43F66 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				
-				INFOPLIST_FILE = "BakeryGame/Info.plist";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.labelle.bakery";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};

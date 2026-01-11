@@ -11,6 +11,7 @@
 // ============================================================================
 
 const std = @import("std");
+const builtin = @import("builtin");
 const engine = @import("labelle-engine");
 const ProjectConfig = engine.ProjectConfig;
 
@@ -19,6 +20,45 @@ const sokol = @import("sokol");
 const sg = sokol.gfx;
 const sgl = sokol.gl;
 const sapp = sokol.app;
+
+// iOS bundle path helper - changes working directory to bundle resources on iOS
+fn setupBundlePath() void {
+    if (builtin.os.tag != .ios) return;
+
+    // On iOS, use CoreFoundation to get the bundle resources path
+    const c = @cImport({
+        @cInclude("CoreFoundation/CoreFoundation.h");
+        @cInclude("unistd.h");
+    });
+
+    const bundle = c.CFBundleGetMainBundle();
+    if (bundle == null) {
+        std.debug.print("Warning: Could not get main bundle\n", .{});
+        return;
+    }
+
+    const resources_url = c.CFBundleCopyResourcesDirectoryURL(bundle);
+    if (resources_url == null) {
+        std.debug.print("Warning: Could not get resources URL\n", .{});
+        return;
+    }
+    defer c.CFRelease(resources_url);
+
+    var path_buf: [1024:0]u8 = undefined;
+    if (c.CFURLGetFileSystemRepresentation(resources_url, 1, &path_buf, path_buf.len) == 0) {
+        std.debug.print("Warning: Could not get file system representation\n", .{});
+        return;
+    }
+
+    std.debug.print("Bundle resources path: {s}\n", .{@as([*:0]u8, &path_buf)});
+
+    // Change working directory to bundle resources
+    if (c.chdir(&path_buf) != 0) {
+        std.debug.print("Warning: Could not change to bundle directory\n", .{});
+    } else {
+        std.debug.print("Changed working directory to bundle resources\n", .{});
+    }
+}
 
 // Plugin imports
 const labelle_tasks = @import("labelle-tasks");
@@ -127,6 +167,10 @@ var scene_storage: engine.Scene = undefined;
 export fn init() callconv(.c) void {
     state.ci_test = std.posix.getenv("CI_TEST") != null;
 
+    // On iOS, change working directory to bundle resources
+    // This must be done first so all relative paths work correctly
+    setupBundlePath();
+
     // Initialize sokol_gfx with sokol_app's rendering context
     sg.setup(.{
         .environment = sokol.glue.environment(),
@@ -142,10 +186,35 @@ export fn init() callconv(.c) void {
     state.allocator = std.heap.page_allocator;
 
     // Load project config
-    state.project = ProjectConfig.load(state.allocator, "project.labelle") catch |err| {
-        std.debug.print("Failed to load project.labelle: {}\n", .{err});
-        sapp.quit();
-        return;
+    // On iOS, try to load from bundle but fall back to defaults if not found
+    // (iOS code signing has issues with resource files)
+    const project_file = if (builtin.os.tag == .ios) "project.json" else "project.labelle";
+    state.project = ProjectConfig.load(state.allocator, project_file) catch |err| blk: {
+        if (builtin.os.tag == .ios) {
+            // Use default config for iOS if file not found
+            std.debug.print("Using default config for iOS (file load error: {})\n", .{err});
+            break :blk ProjectConfig{
+                .version = 1,
+                .name = "bakery-game",
+                .initial_scene = "main",
+                .window = .{
+                    .width = 1024,
+                    .height = 768,
+                    .title = "Bakery Game",
+                    .target_fps = 60,
+                },
+                .camera = .{
+                    .x = -160,
+                    .y = -20,
+                    .zoom = 1.0,
+                },
+                .resources = .{ .atlases = &.{} },
+            };
+        } else {
+            std.debug.print("Failed to load project config: {}\n", .{err});
+            sapp.quit();
+            return;
+        }
     };
 
     // Convert title to sentinel-terminated string
@@ -337,10 +406,10 @@ export fn event(ev: ?*const sapp.Event) callconv(.c) void {
 // Entry Point
 // ============================================================================
 
-/// Entry point - uses sokol's SOKOL_NO_ENTRY mode via sapp.run()
-/// sokol-zig defines SOKOL_NO_ENTRY for all non-Android platforms,
-/// so we call sapp.run() ourselves rather than exporting sokol_main.
-pub fn main() void {
+/// C-callable entry point for iOS - called from main.m
+/// This allows Xcode to compile Objective-C source code (satisfying code signing)
+/// while still using the Zig engine.
+export fn labelle_ios_main() void {
     sapp.run(.{
         .init_cb = init,
         .frame_cb = frame,
@@ -354,4 +423,16 @@ pub fn main() void {
         .icon = .{ .sokol_default = true },
         .logger = .{ .func = sokol.log.func },
     });
+}
+
+comptime {
+    // Only export main for non-iOS builds (avoids duplicate main symbol when linking with main.m)
+    if (builtin.os.tag != .ios) {
+        @export(&mainImpl, .{ .name = "main" });
+    }
+}
+
+fn mainImpl() callconv(.c) c_int {
+    labelle_ios_main();
+    return 0;
 }

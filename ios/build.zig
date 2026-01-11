@@ -190,10 +190,14 @@ pub fn build(b: *std.Build) void {
     // ========================================
     // iOS Simulator build
     // ========================================
+    // Note: iOS simulator on Apple Silicon needs specific CPU features for NEON intrinsics
+    // used by dependencies like clay. We use apple_a14 as baseline which includes the
+    // required features (altnzcv, etc.)
     const ios_sim_query: std.Target.Query = .{
         .cpu_arch = .aarch64,
         .os_tag = .ios,
         .abi = .simulator,
+        .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_a14 },
     };
     const ios_sim_target = b.resolveTargetQuery(ios_sim_query);
     const ios_sim_sdk_path = std.zig.system.darwin.getSdk(b.allocator, &ios_sim_target.result);
@@ -236,8 +240,11 @@ pub fn build(b: *std.Build) void {
         sim_sokol_clib.root_module.addLibraryPath(.{ .cwd_relative = lib_path });
     }
 
-    const ios_sim_exe = b.addExecutable(.{
-        .name = "BakeryGame_sim",
+    // Build as static library so Xcode can compile main.m and link against it
+    // This satisfies Xcode's code signing requirements
+    const ios_sim_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "BakeryGame",
         .root_module = b.createModule(.{
             .root_source_file = b.path("../ios_main.zig"),
             .target = ios_sim_target,
@@ -250,27 +257,23 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    ios_sim_exe.linkLibrary(sim_sokol_clib);
-    ios_sim_exe.linkLibC();
+    ios_sim_lib.linkLibrary(sim_sokol_clib);
+    ios_sim_lib.linkLibC();
 
     if (ios_sim_sdk_path) |sdk| {
         const fw_path = b.pathJoin(&.{ sdk, "System", "Library", "Frameworks" });
         const subfw_path = b.pathJoin(&.{ sdk, "System", "Library", "SubFrameworks" });
-        ios_sim_exe.root_module.addSystemFrameworkPath(.{ .cwd_relative = fw_path });
-        ios_sim_exe.root_module.addSystemFrameworkPath(.{ .cwd_relative = subfw_path });
-        ios_sim_exe.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr", "include" }) });
-        ios_sim_exe.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr", "lib" }) });
+        ios_sim_lib.root_module.addSystemFrameworkPath(.{ .cwd_relative = fw_path });
+        ios_sim_lib.root_module.addSystemFrameworkPath(.{ .cwd_relative = subfw_path });
+        ios_sim_lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr", "include" }) });
+        ios_sim_lib.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr", "lib" }) });
     }
 
-    ios_sim_exe.root_module.linkFramework("Foundation", .{});
-    ios_sim_exe.root_module.linkFramework("UIKit", .{});
-    ios_sim_exe.root_module.linkFramework("Metal", .{});
-    ios_sim_exe.root_module.linkFramework("MetalKit", .{});
-    ios_sim_exe.root_module.linkFramework("AudioToolbox", .{});
-    ios_sim_exe.root_module.linkFramework("AVFoundation", .{});
-
-    const ios_sim_step = b.step("ios-sim", "Build for iOS simulator");
-    ios_sim_step.dependOn(&ios_sim_exe.step);
+    const ios_sim_step = b.step("ios-sim", "Build static library for iOS simulator");
+    ios_sim_step.dependOn(&ios_sim_lib.step);
+    ios_sim_step.dependOn(&b.addInstallArtifact(ios_sim_lib, .{}).step);
+    // Also install sokol_clib so Xcode can link it
+    ios_sim_step.dependOn(&b.addInstallArtifact(sim_sokol_clib, .{}).step);
 
     // ========================================
     // Xcode project generation

@@ -146,11 +146,8 @@ UUID_ASSETS_BUILD_REF=$(uuidgen | tr -d '-' | cut -c1-24)
 UUID_RESOURCES_BUILD_REF=$(uuidgen | tr -d '-' | cut -c1-24)
 UUID_PROJECT_LABELLE_BUILD_REF=$(uuidgen | tr -d '-' | cut -c1-24)
 
-# Team ID for signing
-TEAM_SETTING=""
-if [ -n "$TEAM_ID" ]; then
-    TEAM_SETTING="DEVELOPMENT_TEAM = $TEAM_ID;"
-fi
+# Code signing disabled by default for simulator support without developer account
+# For device deployment, configure signing in Xcode manually
 
 # Generate project.pbxproj
 cat > "$XCODEPROJ/project.pbxproj" << EOF
@@ -404,8 +401,9 @@ cat > "$XCODEPROJ/project.pbxproj" << EOF
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				${TEAM_SETTING}
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				INFOPLIST_FILE = "${APP_NAME_SAFE}/Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -427,8 +425,9 @@ cat > "$XCODEPROJ/project.pbxproj" << EOF
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				${TEAM_SETTING}
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				INFOPLIST_FILE = "${APP_NAME_SAFE}/Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
