@@ -1,6 +1,7 @@
 # Labelle generated files
 .labelle/
-main.zig
+/main.zig
+# Note: wasm/main.zig is tracked (WASM-specific entry point)
 
 # Zig build artifacts
 .zig-cache/

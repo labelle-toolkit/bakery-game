@@ -25,6 +25,17 @@ const Items = items.Items;
 const main = @import("../main.zig");
 const Context = main.labelle_tasksContext;
 
+/// Track which item entity each worker is carrying (worker_id -> item_id)
+var worker_carried_items: std.AutoHashMap(u64, u64) = undefined;
+var worker_items_initialized: bool = false;
+
+fn ensureWorkerItemsInit() void {
+    if (!worker_items_initialized) {
+        worker_carried_items = std.AutoHashMap(u64, u64).init(std.heap.page_allocator);
+        worker_items_initialized = true;
+    }
+}
+
 /// Game-specific task hooks for labelle-tasks integration.
 /// These handlers respond to task engine events and integrate
 /// with the game's visual/movement systems.
@@ -86,13 +97,27 @@ pub const GameHooks = struct {
 
     pub fn store_started(payload: anytype) void {
         const registry = payload.registry orelse return;
+        const game = payload.game orelse return;
         const Position = engine.render.Position;
 
         const storage_entity = engine.entityFromU64(payload.storage_id);
         const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
 
-        // Set MovementTarget component on the worker
         const worker_entity = engine.entityFromU64(payload.worker_id);
+
+        // Attach carried item to worker (item follows worker during transport)
+        ensureWorkerItemsInit();
+        if (worker_carried_items.get(payload.worker_id)) |item_id| {
+            const item_entity = engine.entityFromU64(item_id);
+            game.setParent(item_entity, worker_entity) catch |err| {
+                log.warn("store_started: failed to attach item to worker: {}", .{err});
+            };
+            // Position item at worker's location (offset slightly)
+            game.setLocalPositionXY(item_entity, 0, 10);
+            log.info("store_started: attached item {d} to worker {d}", .{ item_id, payload.worker_id });
+        }
+
+        // Set MovementTarget component on the worker
         registry.set(worker_entity, MovementTarget{
             .target_x = storage_pos.x,
             .target_y = storage_pos.y,
@@ -106,6 +131,10 @@ pub const GameHooks = struct {
 
         const item_entity = engine.entityFromU64(payload.item_id);
         const item_pos = registry.tryGet(Position, item_entity) orelse return;
+
+        // Track which item this worker will pick up
+        ensureWorkerItemsInit();
+        worker_carried_items.put(payload.worker_id, payload.item_id) catch {};
 
         // Set MovementTarget component on the worker
         const worker_entity = engine.entityFromU64(payload.worker_id);
@@ -152,10 +181,17 @@ pub const GameHooks = struct {
 
         const item_entity = engine.entityFromU64(payload.item_id);
 
-        game.setPositionXY(item_entity, storage_pos.x, storage_pos.y);
+        // Detach item from worker (was attached during transport)
+        game.removeParent(item_entity);
 
-        const storage_z = if (registry.tryGet(Shape, storage_entity)) |s| s.z_index else 128;
-        game.setZIndex(item_entity, storage_z + 1);
+        // Clean up worker→item tracking
+        ensureWorkerItemsInit();
+        _ = worker_carried_items.remove(payload.worker_id);
+
+        game.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
+
+        const storage_z: u8 = if (registry.tryGet(Shape, storage_entity)) |s| @intCast(@min(@max(s.z_index, 0), 254)) else 128;
+        game.setZIndex(item_entity, storage_z +| 1);
 
         // Take screenshot on delivery
         delivery_counter += 1;

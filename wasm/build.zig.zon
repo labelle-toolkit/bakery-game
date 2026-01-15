@@ -1,0 +1,28 @@
+.{
+    .fingerprint = 0xd813a79796402f4e,
+    .name = .bakery_game_wasm,
+    .version = "0.1.0",
+    .dependencies = .{
+        .@"labelle-engine" = .{
+            .url = "git+https://github.com/labelle-toolkit/labelle-engine#v0.52.2",
+            .hash = "labelle_engine-0.52.2-rhO5vv9zGwBHZX4nfzKiTgwiT6ZeC3gePnknxGL3Vk4Q",
+        },
+        .@"labelle-tasks" = .{
+            .path = "../../labelle-tasks",
+        },
+        .raylib_zig = .{
+            .url = "https://github.com/Not-Nik/raylib-zig/archive/refs/tags/v5.6.0-dev.tar.gz",
+            .hash = "raylib_zig-5.6.0-dev-KE8REL5MBQAf3p497t52Xw9P7ojndIkVOWPXnLiLLw2P",
+        },
+        .emsdk = .{
+            .url = "git+https://github.com/emscripten-core/emsdk?ref=4.0.9#3bcf1dcd01f040f370e10fe673a092d9ed79ebb5",
+            .hash = "N-V-__8AAJl1DwBezhYo_VE6f53mPVm00R-Fk28NPW7P14EQ",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "main.zig",
+        "index.html",
+    },
+}
