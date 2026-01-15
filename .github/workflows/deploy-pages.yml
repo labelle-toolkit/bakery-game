@@ -37,6 +37,18 @@ jobs:
         with:
           version: 0.15.2
 
+      - name: Copy shared files to wasm directory
+        run: |
+          # Copy shared directories that wasm/main.zig imports
+          cp -r enums wasm/
+          cp -r prefabs wasm/
+          cp -r components wasm/
+          cp -r scripts wasm/
+          cp -r hooks wasm/
+          cp -r scenes wasm/
+          echo "=== Copied shared directories ==="
+          ls -la wasm/
+
       - name: Build WASM
         working-directory: wasm
         run: |

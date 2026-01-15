@@ -9,29 +9,29 @@ const std = @import("std");
 const engine = @import("labelle-engine");
 
 const labelle_tasks = @import("labelle-tasks");
-const items_enum = @import("../enums/items.zig");
+const items_enum = @import("enums/items.zig");
 pub const Items = items_enum.Items;
 pub const GameId = u64;
 pub const labelle_tasksBindItems = labelle_tasks.bind(Items);
 
-const oven_prefab = @import("../prefabs/oven.zon");
-const water_well_prefab = @import("../prefabs/water_well.zon");
-const water_prefab = @import("../prefabs/water.zon");
-const baker_prefab = @import("../prefabs/baker.zon");
-const flour_prefab = @import("../prefabs/flour.zon");
+const oven_prefab = @import("prefabs/oven.zon");
+const water_well_prefab = @import("prefabs/water_well.zon");
+const water_prefab = @import("prefabs/water.zon");
+const baker_prefab = @import("prefabs/baker.zon");
+const flour_prefab = @import("prefabs/flour.zon");
 
-const movement_target_comp = @import("../components/movement_target.zig");
-const work_progress_comp = @import("../components/work_progress.zig");
+const movement_target_comp = @import("components/movement_target.zig");
+const work_progress_comp = @import("components/work_progress.zig");
 pub const MovementTarget = movement_target_comp.MovementTarget;
 pub const WorkProgress = work_progress_comp.WorkProgress;
 
-const worker_movement_script = @import("../scripts/worker_movement.zig");
-const storage_inspector_script = @import("../scripts/storage_inspector.zig");
-const work_processor_script = @import("../scripts/work_processor.zig");
-const camera_control_script = @import("../scripts/camera_control.zig");
-const delivery_validator_script = @import("../scripts/delivery_validator.zig");
+const worker_movement_script = @import("scripts/worker_movement.zig");
+const storage_inspector_script = @import("scripts/storage_inspector.zig");
+const work_processor_script = @import("scripts/work_processor.zig");
+const camera_control_script = @import("scripts/camera_control.zig");
+const delivery_validator_script = @import("scripts/delivery_validator.zig");
 
-const task_hooks_hooks = @import("../hooks/task_hooks.zig");
+const task_hooks_hooks = @import("hooks/task_hooks.zig");
 
 const main_module = @This();
 
@@ -73,7 +73,7 @@ const Hooks = engine.MergeEngineHooks(.{
 const Game = engine.GameWith(Hooks);
 
 pub const Loader = engine.SceneLoader(Prefabs, Components, Scripts);
-pub const initial_scene = @import("../scenes/main.zon");
+pub const initial_scene = @import("scenes/main.zon");
 
 // Compile-time embedded configuration (no file I/O in WASM)
 const WINDOW_WIDTH = 1024;
