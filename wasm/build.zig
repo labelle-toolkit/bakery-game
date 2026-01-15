@@ -18,37 +18,43 @@ pub fn build(b: *std.Build) !void {
     // WASM uses raylib backend with emscripten
     const backend: Backend = .raylib;
     const ecs_backend: EcsBackend = .zig_ecs;
-    _ = GuiBackend; // Not used - labelle-tasks doesn't pass gui_backend
+    _ = GuiBackend; // Not used
 
-    // Get labelle-tasks plugin first - this will create its own labelle-engine dependency
-    // We get our engine from labelle-tasks to avoid diamond dependency (both use same instance)
+    // Get labelle-engine dependency directly
+    const engine_dep = b.dependency("labelle-engine", .{
+        .target = target,
+        .optimize = optimize,
+        .backend = backend,
+        .ecs_backend = ecs_backend,
+        .physics = false,
+    });
+    const engine_mod = engine_dep.module("labelle-engine");
+
+    // Get labelle-tasks and create our own module to avoid diamond dependency
+    // By creating the module ourselves, we control which engine_mod it uses
     const labelle_tasks_dep = b.dependency("labelle-tasks", .{
         .target = target,
         .optimize = optimize,
-        .backend = backend,
-        .ecs_backend = ecs_backend,
-        .physics = false,
     });
-    const labelle_tasks_mod = labelle_tasks_dep.module("labelle_tasks");
+    const ecs_mod = engine_dep.module("ecs");
 
-    // Get labelle-engine through labelle-tasks's dependency chain
-    // This ensures we use the exact same engine instance that labelle-tasks uses
-    // IMPORTANT: Must pass exactly the same options as labelle-tasks/build.zig line 35-41
-    const engine_dep = labelle_tasks_dep.builder.dependency("labelle-engine", .{
+    // Create labelle-tasks module with our engine_mod
+    const labelle_tasks_mod = b.addModule("labelle-tasks", .{
+        .root_source_file = labelle_tasks_dep.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
-        .backend = backend,
-        .ecs_backend = ecs_backend,
-        .physics = false,
-        // Note: gui_backend is NOT passed since labelle-tasks doesn't pass it
     });
-    const engine_mod = engine_dep.module("labelle-engine");
+    labelle_tasks_mod.addImport("labelle-engine", engine_mod);
+    labelle_tasks_mod.addImport("ecs", ecs_mod);
+    // Add transitive dependencies that labelle-engine's internal modules need
+    labelle_tasks_mod.addImport("raylib", engine_dep.module("raylib"));
+    labelle_tasks_mod.addImport("sokol", engine_dep.module("sokol"));
 
     // Check if targeting emscripten (WASM)
     const is_wasm = target.result.os.tag == .emscripten;
 
     if (is_wasm) {
-        // Get raylib dependency for emsdk via labelle-gfx chain
+        // Get labelle-gfx from engine's dependency chain for emsdk setup
         const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
             .target = target,
             .optimize = optimize,
