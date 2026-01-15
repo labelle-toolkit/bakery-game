@@ -20,8 +20,20 @@ pub fn build(b: *std.Build) !void {
     const ecs_backend: EcsBackend = .zig_ecs;
     const gui_backend: GuiBackend = .none;
 
-    // Get labelle-engine dependency
-    const engine_dep = b.dependency("labelle-engine", .{
+    // Get labelle-tasks plugin first - this will create its own labelle-engine dependency
+    // We get our engine from labelle-tasks to avoid diamond dependency (both use same instance)
+    const labelle_tasks_dep = b.dependency("labelle-tasks", .{
+        .target = target,
+        .optimize = optimize,
+        .backend = backend,
+        .ecs_backend = ecs_backend,
+        .physics = false,
+    });
+    const labelle_tasks_mod = labelle_tasks_dep.module("labelle_tasks");
+
+    // Get labelle-engine through labelle-tasks's dependency chain
+    // This ensures we use the exact same engine instance that labelle-tasks uses
+    const engine_dep = labelle_tasks_dep.builder.dependency("labelle-engine", .{
         .target = target,
         .optimize = optimize,
         .backend = backend,
@@ -31,29 +43,16 @@ pub fn build(b: *std.Build) !void {
     });
     const engine_mod = engine_dep.module("labelle-engine");
 
-    // Get labelle-tasks plugin
-    // Create the module ourselves to use our engine_mod, avoiding diamond dependency
-    const labelle_tasks_dep = b.dependency("labelle-tasks", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    const ecs_mod = engine_dep.module("ecs");
-    const labelle_tasks_mod = b.addModule("labelle-tasks", .{
-        .root_source_file = labelle_tasks_dep.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    labelle_tasks_mod.addImport("labelle-engine", engine_mod);
-    labelle_tasks_mod.addImport("ecs", ecs_mod);
-
     // Check if targeting emscripten (WASM)
     const is_wasm = target.result.os.tag == .emscripten;
 
     if (is_wasm) {
         // Get raylib dependency for emsdk via labelle-gfx chain
+        // Use engine_dep's builder to stay in the same dependency graph
         const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
             .target = target,
             .optimize = optimize,
+            .backend = backend,
         });
         const raylib_zig = @import("raylib_zig");
         const emsdk = raylib_zig.emsdk;
