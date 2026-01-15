@@ -46,12 +46,16 @@ pub fn build(b: *std.Build) !void {
     const is_wasm = target.result.os.tag == .emscripten;
 
     if (is_wasm) {
-        // Import raylib_zig from local dependency for emsdk utilities
+        // Get raylib dependency for emsdk via labelle-gfx chain
+        const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
+            .target = target,
+            .optimize = optimize,
+        });
         const raylib_zig = @import("raylib_zig");
         const emsdk = raylib_zig.emsdk;
 
-        // Get raylib_zig dependency and raylib artifact
-        const raylib_zig_dep = b.dependency("raylib_zig", .{
+        // Get raylib_zig dependency and raylib artifact through labelle-gfx
+        const raylib_zig_dep = labelle_gfx_dep.builder.dependency("raylib_zig", .{
             .target = target,
             .optimize = optimize,
         });
