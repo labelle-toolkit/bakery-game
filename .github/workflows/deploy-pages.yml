@@ -45,11 +45,20 @@ jobs:
       - name: Build WASM
         working-directory: wasm
         run: |
-          # Verify emscripten is available
+          # Verify emscripten is available and activate it
+          source "$EMSDK/emsdk_env.sh"
           emcc --version
 
+          # Generate the sysroot cache (needed for zig's C compiler)
+          echo "int main() { return 0; }" > /tmp/test.c
+          emcc /tmp/test.c -o /tmp/test.js || true
+          rm -f /tmp/test.c /tmp/test.js /tmp/test.wasm
+
+          # Verify sysroot exists
+          echo "EMSDK=$EMSDK"
+          ls -la "$EMSDK/upstream/emscripten/cache/sysroot/include/" | head -5
+
           # Build for WASM with emscripten target
-          # EMSDK env var is set by setup-emsdk action
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm
 
           # List output
