@@ -54,12 +54,14 @@ jobs:
           emcc /tmp/test.c -o /tmp/test.js || true
           rm -f /tmp/test.c /tmp/test.js /tmp/test.wasm
 
-          # Verify sysroot exists
+          # Get the sysroot path
+          SYSROOT="$EMSDK/upstream/emscripten/cache/sysroot"
           echo "EMSDK=$EMSDK"
-          ls -la "$EMSDK/upstream/emscripten/cache/sysroot/include/" | head -5
+          echo "SYSROOT=$SYSROOT"
+          ls -la "$SYSROOT/include/" | head -5
 
-          # Build for WASM with emscripten target
-          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm
+          # Build for WASM with emscripten target and explicit sysroot
+          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast --sysroot "$SYSROOT" wasm
 
           # List output
           echo "=== Build output ==="
