@@ -58,38 +58,20 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             const pos = view.get(Position, entity);
             camera_x = pos.x;
             camera_y = pos.y;
-            // Debug: log position occasionally
-            if (frame_count % 60 == 0) {
-                std.log.info("[CameraControl] Baker at ({d:.1}, {d:.1})", .{ pos.x, pos.y });
-            }
-        } else {
-            if (frame_count % 60 == 0) {
-                std.log.warn("[CameraControl] No baker entity found!", .{});
-            }
         }
     } else {
         // Manual camera control with WASD
-        var moved = false;
-
         if (input.isKeyDown(.w)) {
             camera_y += camera_speed * dt;
-            moved = true;
         }
         if (input.isKeyDown(.s)) {
             camera_y -= camera_speed * dt;
-            moved = true;
         }
         if (input.isKeyDown(.a)) {
             camera_x -= camera_speed * dt;
-            moved = true;
         }
         if (input.isKeyDown(.d)) {
             camera_x += camera_speed * dt;
-            moved = true;
-        }
-
-        if (moved and frame_count % 30 == 0) {
-            std.log.info("[CameraControl] Camera at ({d:.1}, {d:.1})", .{ camera_x, camera_y });
         }
     }
 
