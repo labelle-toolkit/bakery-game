@@ -37,31 +37,40 @@ jobs:
         with:
           version: 0.15.2
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: '4.0.9'
-
       - name: Build WASM
         working-directory: wasm
         run: |
-          # Verify emscripten is available and activate it
-          source "$EMSDK/emsdk_env.sh"
-          emcc --version
+          # First, fetch dependencies to get the emsdk path
+          zig fetch --global-cache-dir="../.zig-cache" "git+https://github.com/emscripten-core/emsdk?ref=4.0.9#3bcf1dcd01f040f370e10fe673a092d9ed79ebb5" || true
 
-          # Generate the sysroot cache (needed for zig's C compiler)
+          # Find the emsdk path in zig's cache
+          ZIG_EMSDK=$(find ../.zig-cache/p -maxdepth 1 -name 'N-V-*' -type d | head -1)
+          if [ -z "$ZIG_EMSDK" ]; then
+            echo "ERROR: Could not find emsdk in zig cache"
+            exit 1
+          fi
+          echo "Found zig-cached emsdk at: $ZIG_EMSDK"
+
+          # Set EMSDK to zig's cached version and activate it
+          export EMSDK="$ZIG_EMSDK"
+          source "$EMSDK/emsdk_env.sh" || true
+
+          # Install and activate the SDK
+          "$EMSDK/emsdk" install 4.0.9
+          "$EMSDK/emsdk" activate 4.0.9
+          source "$EMSDK/emsdk_env.sh"
+
+          # Verify and generate sysroot
+          emcc --version
           echo "int main() { return 0; }" > /tmp/test.c
-          emcc /tmp/test.c -o /tmp/test.js || true
+          emcc /tmp/test.c -o /tmp/test.js
           rm -f /tmp/test.c /tmp/test.js /tmp/test.wasm
 
-          # Get the sysroot path
-          SYSROOT="$EMSDK/upstream/emscripten/cache/sysroot"
           echo "EMSDK=$EMSDK"
-          echo "SYSROOT=$SYSROOT"
-          ls -la "$SYSROOT/include/" | head -5
+          ls -la "$EMSDK/upstream/emscripten/cache/sysroot/include/" | head -5
 
-          # Build for WASM with emscripten target and explicit sysroot
-          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast --sysroot "$SYSROOT" wasm
+          # Build for WASM with emscripten target
+          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm
 
           # List output
           echo "=== Build output ==="
