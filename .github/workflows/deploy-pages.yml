@@ -58,9 +58,17 @@ jobs:
       - name: Build WASM
         working-directory: wasm
         run: |
-          # Verify emscripten is available
+          # Verify emscripten is available and generate sysroot cache
           emcc --version
           echo "EMSDK=$EMSDK"
+
+          # Generate sysroot by compiling a simple test file
+          echo "int main() { return 0; }" > /tmp/test.c
+          emcc /tmp/test.c -o /tmp/test.js
+          rm -f /tmp/test.c /tmp/test.js /tmp/test.wasm
+
+          # Verify sysroot was generated
+          ls -la "$EMSDK/upstream/emscripten/cache/sysroot/include/" | head -5
 
           # Fetch zig dependencies first
           zig build -Dtarget=wasm32-emscripten --fetch 2>&1 || true
