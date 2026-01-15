@@ -1,6 +1,6 @@
 .{
     .name = "main",
-    .scripts = .{ "task_initializer", "dangling_item_assigner", "storage_inspector", "worker_movement", "camera_control", "work_processor" },
+    .scripts = .{ "task_initializer", "storage_inspector", "worker_movement", "camera_control", "work_processor" },
     .entities = .{
         // Baker (Worker) - will pick up dangling items
         .{
