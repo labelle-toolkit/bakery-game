@@ -20,8 +20,19 @@ pub fn build(b: *std.Build) !void {
     const ecs_backend: EcsBackend = .zig_ecs;
     _ = GuiBackend; // Not used
 
-    // Get labelle-engine dependency directly
-    const engine_dep = b.dependency("labelle-engine", .{
+    // Get labelle-tasks first - it will create its own labelle-engine
+    const labelle_tasks_dep = b.dependency("labelle-tasks", .{
+        .target = target,
+        .optimize = optimize,
+        .backend = backend,
+        .ecs_backend = ecs_backend,
+        .physics = false,
+    });
+    const labelle_tasks_mod = labelle_tasks_dep.module("labelle_tasks");
+
+    // Get labelle-engine from labelle-tasks's builder to use the same instance
+    // This avoids diamond dependency by not having our own engine_dep
+    const engine_dep = labelle_tasks_dep.builder.dependency("labelle-engine", .{
         .target = target,
         .optimize = optimize,
         .backend = backend,
@@ -30,48 +41,23 @@ pub fn build(b: *std.Build) !void {
     });
     const engine_mod = engine_dep.module("labelle-engine");
 
-    // Get labelle-tasks and create our own module to avoid diamond dependency
-    // By creating the module ourselves, we control which engine_mod it uses
-    const labelle_tasks_dep = b.dependency("labelle-tasks", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    const ecs_mod = engine_dep.module("ecs");
-
-    // Create labelle-tasks module with our engine_mod
-    const labelle_tasks_mod = b.addModule("labelle-tasks", .{
-        .root_source_file = labelle_tasks_dep.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    labelle_tasks_mod.addImport("labelle-engine", engine_mod);
-    labelle_tasks_mod.addImport("ecs", ecs_mod);
-
-    // Add transitive dependencies through the correct dependency chain
-    // labelle-gfx has the raylib and sokol modules
-    const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    labelle_tasks_mod.addImport("labelle", labelle_gfx_dep.module("labelle"));
-    // Get raylib through raylib_zig dependency
-    const raylib_zig_dep = labelle_gfx_dep.builder.dependency("raylib_zig", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    labelle_tasks_mod.addImport("raylib", raylib_zig_dep.module("raylib"));
-    // Get sokol through labelle-gfx
-    labelle_tasks_mod.addImport("sokol", labelle_gfx_dep.module("sokol"));
-
     // Check if targeting emscripten (WASM)
     const is_wasm = target.result.os.tag == .emscripten;
 
     if (is_wasm) {
-        // Use raylib_zig for emsdk setup (already defined above)
+        // Get labelle-gfx through engine for emsdk setup
+        const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
+            .target = target,
+            .optimize = optimize,
+        });
         const raylib_zig = @import("raylib_zig");
         const emsdk = raylib_zig.emsdk;
 
-        // Get raylib artifact for WASM linking
+        // Get raylib_zig dependency and raylib artifact through labelle-gfx
+        const raylib_zig_dep = labelle_gfx_dep.builder.dependency("raylib_zig", .{
+            .target = target,
+            .optimize = optimize,
+        });
         const raylib_artifact = raylib_zig_dep.artifact("raylib");
 
         // Create WASM library
