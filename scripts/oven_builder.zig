@@ -64,10 +64,8 @@ pub fn init(game: *Game, scene: *Scene) void {
             const id = engine.entityToU64(entity);
             if (storage.accepts == .Flour) {
                 flour_eis_id = id;
-                Context.registerStorage(id, Items.Flour);
             } else if (storage.accepts == .Water) {
                 water_eis_id = id;
-                Context.registerStorage(id, Items.Water);
             }
         }
     }
@@ -84,7 +82,6 @@ pub fn init(game: *Game, scene: *Scene) void {
         .role = .iis,
         .accepts = Items.Flour,
     });
-    Context.registerStorage(flour_iis_id, Items.Flour);
 
     // Create IIS - Internal Water slot (recipe input)
     const water_iis_entity = registry.create();
@@ -98,7 +95,6 @@ pub fn init(game: *Game, scene: *Scene) void {
         .role = .iis,
         .accepts = Items.Water,
     });
-    Context.registerStorage(water_iis_id, Items.Water);
 
     // Create IOS - Internal Output slot (produced Bread)
     const bread_ios_entity = registry.create();
@@ -112,7 +108,6 @@ pub fn init(game: *Game, scene: *Scene) void {
         .role = .ios,
         .accepts = Items.Bread,
     });
-    Context.registerStorage(bread_ios_id, Items.Bread);
 
     // Create EOS - External Output storage (final Bread storage)
     const bread_eos_entity = registry.create();
@@ -126,7 +121,6 @@ pub fn init(game: *Game, scene: *Scene) void {
         .role = .eos,
         .accepts = Items.Bread,
     });
-    Context.registerStorage(bread_eos_id, Items.Bread);
 
     // Create array of storage IDs
     const storage_ids = [_]u64{
