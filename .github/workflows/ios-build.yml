@@ -90,10 +90,26 @@ jobs:
 
           # Patch build.zig to add labelle-tasks dependency and module import
           if [ -f ios/build.zig ]; then
-            # Use perl for reliable multiline insertion (sed -i differs between BSD/GNU)
-            perl -i.bak -pe 's/(const ios_engine = b\.dependency.*?;)/$1\n    const ios_labelle_tasks = b.dependency("labelle-tasks", .{ .target = ios_device_target, .optimize = optimize, });/' ios/build.zig
-            # Add import to main module
-            perl -i.bak -pe 's/\.{ \.name = "labelle-engine", \.module = ios_engine\.module\("labelle-engine"\) },/.{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") }, .{ .name = "labelle-tasks", .module = ios_labelle_tasks.module("labelle_tasks") },/' ios/build.zig
+            # Insert labelle-tasks dependency after the ios_engine block ends
+            awk '
+            /\.backend = \.sokol,/ {
+              print
+              # Skip the closing }); line
+              getline
+              print
+              # Insert labelle-tasks dependency
+              print "    const ios_labelle_tasks = b.dependency(\"labelle-tasks\", .{"
+              print "        .target = ios_device_target,"
+              print "        .optimize = optimize,"
+              print "    });"
+              next
+            }
+            # Add labelle-tasks import alongside labelle-engine
+            /\.name = "labelle-engine", \.module = ios_engine\.module\("labelle-engine"\)/ {
+              gsub(/\},/, "}, .{ .name = \"labelle-tasks\", .module = ios_labelle_tasks.module(\"labelle_tasks\") },")
+            }
+            { print }
+            ' ios/build.zig > ios/build.zig.new && mv ios/build.zig.new ios/build.zig
             echo "Patched ios/build.zig to include labelle-tasks"
           fi
 
