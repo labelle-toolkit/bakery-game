@@ -54,7 +54,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     labelle_tasks_mod.addImport("labelle", labelle_gfx_dep.module("labelle"));
-    labelle_tasks_mod.addImport("build_options", engine_dep.module("build_options"));
     // Get raylib through raylib_zig dependency
     const raylib_zig_dep = labelle_gfx_dep.builder.dependency("raylib_zig", .{
         .target = target,
