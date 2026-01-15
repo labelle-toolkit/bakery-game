@@ -90,20 +90,20 @@ jobs:
 
           # Patch build.zig to add labelle-tasks dependency and module import
           if [ -f ios/build.zig ]; then
-            # Write patch script to file to avoid YAML escaping issues
-            cat > /tmp/patch_build.py << 'PYSCRIPT'
-import re, sys
-with open(sys.argv[1], 'r') as f: content = f.read()
-# Insert labelle-tasks dependency after ios_engine block
-pattern = r'(const ios_engine = b\.dependency\("labelle-engine", \.{[^}]+\.backend = \.sokol,\s*}\);)'
-dep_code = '\n    const ios_labelle_tasks = b.dependency("labelle-tasks", .{\n        .target = ios_device_target,\n        .optimize = optimize,\n    });'
-content = re.sub(pattern, r'\1' + dep_code, content, flags=re.DOTALL)
-# Add labelle-tasks import alongside labelle-engine
-content = content.replace('.{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") },', '.{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") }, .{ .name = "labelle-tasks", .module = ios_labelle_tasks.module("labelle_tasks") },')
-with open(sys.argv[1], 'w') as f: f.write(content)
-print("Patched successfully")
-PYSCRIPT
-            python3 /tmp/patch_build.py ios/build.zig
+            # Use awk for portable patching (works on both BSD and GNU)
+            awk '
+              /\/\/ Create main module/ && !dep_added {
+                print "    const ios_labelle_tasks = b.dependency(\"labelle-tasks\", .{ .target = ios_device_target, .optimize = optimize, });"
+                print ""
+                dep_added = 1
+              }
+              /\.name = "labelle-engine", \.module = ios_engine\.module\("labelle-engine"\)/ && !import_added {
+                gsub(/\},/, "}, .{ .name = \"labelle-tasks\", .module = ios_labelle_tasks.module(\"labelle_tasks\") },")
+                import_added = 1
+              }
+              { print }
+            ' ios/build.zig > ios/build.zig.tmp && mv ios/build.zig.tmp ios/build.zig
+            echo "Patched ios/build.zig to include labelle-tasks"
           fi
 
           # Retry build
