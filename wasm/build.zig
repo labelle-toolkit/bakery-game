@@ -33,13 +33,14 @@ pub fn build(b: *std.Build) !void {
 
     // Get labelle-engine through labelle-tasks's dependency chain
     // This ensures we use the exact same engine instance that labelle-tasks uses
+    // IMPORTANT: Must pass exactly the same options as labelle-tasks/build.zig line 35-41
     const engine_dep = labelle_tasks_dep.builder.dependency("labelle-engine", .{
         .target = target,
         .optimize = optimize,
         .backend = backend,
         .ecs_backend = ecs_backend,
-        .gui_backend = gui_backend,
         .physics = false,
+        // Note: gui_backend is NOT passed since labelle-tasks doesn't pass it
     });
     const engine_mod = engine_dep.module("labelle-engine");
 
@@ -48,11 +49,9 @@ pub fn build(b: *std.Build) !void {
 
     if (is_wasm) {
         // Get raylib dependency for emsdk via labelle-gfx chain
-        // Use engine_dep's builder to stay in the same dependency graph
         const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
             .target = target,
             .optimize = optimize,
-            .backend = backend,
         });
         const raylib_zig = @import("raylib_zig");
         const emsdk = raylib_zig.emsdk;
