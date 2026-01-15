@@ -55,29 +55,45 @@ jobs:
           # First, fetch dependencies by running zig build (will fail but fetches deps)
           zig build -Dtarget=wasm32-emscripten --fetch 2>&1 || true
 
-          # Find the emsdk path in zig's cache by looking for the emsdk script
-          echo "Looking for emsdk in zig cache..."
-          ZIG_EMSDK=""
-          for dir in "$ZIG_GLOBAL_CACHE_DIR/p"/N-V-*; do
+          # Find ALL emsdk directories in both local and global cache
+          echo "Looking for emsdk directories..."
+          EMSDK_DIRS=""
+
+          # Check local cache first (working directory)
+          for dir in .zig-cache/p/N-V-*; do
             if [ -f "$dir/emsdk" ]; then
-              ZIG_EMSDK="$dir"
-              break
+              EMSDK_DIRS="$EMSDK_DIRS $dir"
+              echo "Found emsdk in local cache: $dir"
             fi
           done
 
-          if [ -z "$ZIG_EMSDK" ]; then
-            echo "ERROR: Could not find emsdk in zig cache"
-            echo "Cache contents:"
-            ls -la "$ZIG_GLOBAL_CACHE_DIR/p/" 2>/dev/null | head -20
+          # Also check global cache
+          if [ -n "$ZIG_GLOBAL_CACHE_DIR" ]; then
+            for dir in "$ZIG_GLOBAL_CACHE_DIR/p"/N-V-*; do
+              if [ -f "$dir/emsdk" ]; then
+                EMSDK_DIRS="$EMSDK_DIRS $dir"
+                echo "Found emsdk in global cache: $dir"
+              fi
+            done
+          fi
+
+          if [ -z "$EMSDK_DIRS" ]; then
+            echo "ERROR: Could not find any emsdk in zig cache"
+            echo "Local cache contents:"
+            ls -la .zig-cache/p/ 2>/dev/null | head -20
             exit 1
           fi
-          echo "Found zig-cached emsdk at: $ZIG_EMSDK"
 
-          # Set EMSDK to zig's cached version and activate it
-          export EMSDK="$ZIG_EMSDK"
+          # Install SDK in ALL found emsdk directories
+          for EMSDK_DIR in $EMSDK_DIRS; do
+            echo "Installing SDKs in: $EMSDK_DIR"
+            "$EMSDK_DIR/emsdk" install 4.0.3
+            "$EMSDK_DIR/emsdk" install 4.0.9
+          done
 
-          # Install and activate the SDK (use same version as build.zig.zon: 4.0.9)
-          "$EMSDK/emsdk" install 4.0.9
+          # Use the first one for activation and verification
+          FIRST_EMSDK=$(echo $EMSDK_DIRS | awk '{print $1}')
+          export EMSDK="$FIRST_EMSDK"
           "$EMSDK/emsdk" activate 4.0.9
           source "$EMSDK/emsdk_env.sh"
 
