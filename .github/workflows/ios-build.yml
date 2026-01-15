@@ -60,6 +60,14 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-path
 
+      - name: Generate main.zig
+        run: |
+          echo "::group::Generating main.zig from project.labelle"
+          # Generate main.zig using sibling engine to avoid fetching v0.52.5
+          ~/.labelle/bin/labelle generate --engine-path=../labelle-engine
+          echo "::endgroup::"
+          ls -la main.zig
+
       - name: Build for iOS Simulator
         run: |
           echo "::group::Building for iOS Simulator"
