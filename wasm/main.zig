@@ -6,7 +6,11 @@
 // ============================================================================
 
 const std = @import("std");
+const builtin = @import("builtin");
 const engine = @import("labelle-engine");
+
+// Detect if we're building for emscripten/WASM
+const is_wasm = builtin.os.tag == .emscripten;
 
 const labelle_tasks = @import("labelle-tasks");
 const items_enum = @import("enums/items.zig");
@@ -75,6 +79,15 @@ const Game = engine.GameWith(Hooks);
 pub const Loader = engine.SceneLoader(Prefabs, Components, Scripts);
 pub const initial_scene = @import("scenes/main.zon");
 
+// Get the scene type from Loader.load's return type using compile-time introspection
+const SceneType = blk: {
+    const load_fn_type = @TypeOf(Loader.load);
+    const fn_info = @typeInfo(load_fn_type).@"fn";
+    const return_type = fn_info.return_type.?;
+    // It's an error union, get the payload type
+    break :blk @typeInfo(return_type).error_union.payload;
+};
+
 // Compile-time embedded configuration
 const WINDOW_WIDTH = 1024;
 const WINDOW_HEIGHT = 768;
@@ -83,26 +96,26 @@ const TARGET_FPS = 60;
 const CAMERA_X: f32 = -160;
 const CAMERA_Y: f32 = -20;
 
-// Emscripten C interop
-const emscripten = struct {
+// Emscripten-specific code (only compiled for WASM target)
+const emscripten = if (is_wasm) struct {
     extern fn emscripten_set_main_loop_arg(
-        func: *const fn (?*anyopaque) callconv(.C) void,
+        func: *const fn (?*anyopaque) callconv(.c) void,
         arg: ?*anyopaque,
         fps: c_int,
         simulate_infinite_loop: c_int,
     ) void;
-};
+} else struct {};
 
-// Global state for emscripten callback
+// Global state for emscripten callback (only used in WASM)
 const GameState = struct {
     game: *Game,
-    scene: *Loader.Scene,
+    scene: *SceneType,
     allocator: std.mem.Allocator,
 };
 var game_state: ?GameState = null;
 
-// Frame callback for emscripten
-fn frameCallback(_: ?*anyopaque) callconv(.C) void {
+// Frame callback for emscripten (only compiled for WASM)
+fn frameCallback(_: ?*anyopaque) callconv(.c) void {
     if (game_state) |*state| {
         const dt = state.game.getDeltaTime();
         state.scene.update(dt);
@@ -142,18 +155,35 @@ pub fn main() !void {
     // Emit scene_load hook
     Game.HookDispatcher.emit(.{ .scene_load = .{ .name = initial_scene.name } });
 
-    // Store state for callback
-    game_state = .{
-        .game = &game,
-        .scene = &scene,
-        .allocator = allocator,
-    };
+    if (is_wasm) {
+        // WASM: Store state for callback and use emscripten's main loop
+        game_state = .{
+            .game = &game,
+            .scene = &scene,
+            .allocator = allocator,
+        };
 
-    // Use emscripten's main loop - this never returns in WASM
-    // fps=0 means use requestAnimationFrame, simulate_infinite_loop=1 prevents return
-    emscripten.emscripten_set_main_loop_arg(frameCallback, null, 0, 1);
+        // Use emscripten's main loop - this never returns in WASM
+        // fps=0 means use requestAnimationFrame, simulate_infinite_loop=1 prevents return
+        emscripten.emscripten_set_main_loop_arg(frameCallback, null, 0, 1);
 
-    // This code is never reached in WASM mode
-    scene.deinit();
-    game.deinit();
+        // This code is never reached in WASM mode
+        scene.deinit();
+        game.deinit();
+    } else {
+        // Native: Use traditional game loop
+        while (game.isRunning()) {
+            const dt = game.getDeltaTime();
+            scene.update(dt);
+            game.getPipeline().sync(game.getRegistry());
+
+            const re = game.getRetainedEngine();
+            re.beginFrame();
+            re.render();
+            re.endFrame();
+        }
+
+        scene.deinit();
+        game.deinit();
+    }
 }
