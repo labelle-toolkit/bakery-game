@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) !void {
     // WASM uses raylib backend with emscripten
     const backend: Backend = .raylib;
     const ecs_backend: EcsBackend = .zig_ecs;
-    const gui_backend: GuiBackend = .none;
+    _ = GuiBackend; // Not used - labelle-tasks doesn't pass gui_backend
 
     // Get labelle-tasks plugin first - this will create its own labelle-engine dependency
     // We get our engine from labelle-tasks to avoid diamond dependency (both use same instance)
