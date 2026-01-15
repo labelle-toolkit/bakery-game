@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.15.2",
     .dependencies = .{
         .@"labelle-engine" = .{
-            .url = "git+https://github.com/labelle-toolkit/labelle-engine?ref=v0.34.0",
-            .hash = "labelle_engine-0.34.0-rhO5vuvfDgASSDeY7jm7c3_RfL_t3l8Xf7Zd-HH6h-lx",
+            .url = "git+https://github.com/labelle-toolkit/labelle-engine?ref=v0.52.2",
+            .hash = "labelle_engine-0.52.2-rhO5vv9zGwBHZX4nfzKiTgwiT6ZeC3gePnknxGL3Vk4Q",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon" },

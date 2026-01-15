@@ -49,62 +49,32 @@ jobs:
           echo "=== Copied shared directories ==="
           ls -la wasm/
 
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.9
+          actions-cache-folder: 'emsdk-cache'
+
       - name: Build WASM
         working-directory: wasm
         run: |
-          # First, fetch dependencies by running zig build (will fail but fetches deps)
+          # Verify emscripten is available
+          emcc --version
+          echo "EMSDK=$EMSDK"
+
+          # Fetch zig dependencies first
           zig build -Dtarget=wasm32-emscripten --fetch 2>&1 || true
 
-          # Find ALL emsdk directories in both local and global cache
-          echo "Looking for emsdk directories..."
-          EMSDK_DIRS=""
-
-          # Check local cache first (working directory)
+          # Find zig-cached emsdk directories and symlink upstream from system emsdk
           for dir in .zig-cache/p/N-V-*; do
             if [ -f "$dir/emsdk" ]; then
-              EMSDK_DIRS="$EMSDK_DIRS $dir"
-              echo "Found emsdk in local cache: $dir"
+              echo "Found zig-cached emsdk: $dir"
+              # Remove existing upstream dir and symlink to system emsdk
+              rm -rf "$dir/upstream"
+              ln -s "$EMSDK/upstream" "$dir/upstream"
+              echo "Symlinked $dir/upstream -> $EMSDK/upstream"
             fi
           done
-
-          # Also check global cache
-          if [ -n "$ZIG_GLOBAL_CACHE_DIR" ]; then
-            for dir in "$ZIG_GLOBAL_CACHE_DIR/p"/N-V-*; do
-              if [ -f "$dir/emsdk" ]; then
-                EMSDK_DIRS="$EMSDK_DIRS $dir"
-                echo "Found emsdk in global cache: $dir"
-              fi
-            done
-          fi
-
-          if [ -z "$EMSDK_DIRS" ]; then
-            echo "ERROR: Could not find any emsdk in zig cache"
-            echo "Local cache contents:"
-            ls -la .zig-cache/p/ 2>/dev/null | head -20
-            exit 1
-          fi
-
-          # Install SDK in ALL found emsdk directories
-          for EMSDK_DIR in $EMSDK_DIRS; do
-            echo "Installing SDKs in: $EMSDK_DIR"
-            "$EMSDK_DIR/emsdk" install 4.0.3
-            "$EMSDK_DIR/emsdk" install 4.0.9
-          done
-
-          # Use the first one for activation and verification
-          FIRST_EMSDK=$(echo $EMSDK_DIRS | awk '{print $1}')
-          export EMSDK="$FIRST_EMSDK"
-          "$EMSDK/emsdk" activate 4.0.9
-          source "$EMSDK/emsdk_env.sh"
-
-          # Verify and generate sysroot
-          emcc --version
-          echo "int main() { return 0; }" > /tmp/test.c
-          emcc /tmp/test.c -o /tmp/test.js
-          rm -f /tmp/test.c /tmp/test.js /tmp/test.wasm
-
-          echo "EMSDK=$EMSDK"
-          ls -la "$EMSDK/upstream/emscripten/cache/sysroot/include/" | head -5
 
           # Build for WASM with emscripten target
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm
