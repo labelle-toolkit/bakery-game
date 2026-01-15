@@ -139,7 +139,9 @@ fn frameCallback() callconv(.c) void {
 }
 
 pub fn main() !void {
-    global_allocator = std.heap.page_allocator;
+    // Use C allocator for WASM (works with emscripten's malloc)
+    // page_allocator can cause OutOfMemory issues in WASM
+    global_allocator = if (is_wasm) std.heap.c_allocator else std.heap.page_allocator;
 
     if (is_wasm) {
         // WASM: Allocate game on heap so it survives after main() returns
