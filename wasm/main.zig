@@ -2,7 +2,7 @@
 // WASM Main - Bakery Game
 // ============================================================================
 // WebAssembly version using raylib + emscripten.
-// Config is embedded at compile time (no runtime file I/O in WASM).
+// Uses emscripten_set_main_loop for proper browser integration.
 // ============================================================================
 
 const std = @import("std");
@@ -75,7 +75,7 @@ const Game = engine.GameWith(Hooks);
 pub const Loader = engine.SceneLoader(Prefabs, Components, Scripts);
 pub const initial_scene = @import("scenes/main.zon");
 
-// Compile-time embedded configuration (no file I/O in WASM)
+// Compile-time embedded configuration
 const WINDOW_WIDTH = 1024;
 const WINDOW_HEIGHT = 768;
 const WINDOW_TITLE = "Bakery Game";
@@ -83,8 +83,39 @@ const TARGET_FPS = 60;
 const CAMERA_X: f32 = -160;
 const CAMERA_Y: f32 = -20;
 
+// Emscripten C interop
+const emscripten = struct {
+    extern fn emscripten_set_main_loop_arg(
+        func: *const fn (?*anyopaque) callconv(.C) void,
+        arg: ?*anyopaque,
+        fps: c_int,
+        simulate_infinite_loop: c_int,
+    ) void;
+};
+
+// Global state for emscripten callback
+const GameState = struct {
+    game: *Game,
+    scene: *Loader.Scene,
+    allocator: std.mem.Allocator,
+};
+var game_state: ?GameState = null;
+
+// Frame callback for emscripten
+fn frameCallback(_: ?*anyopaque) callconv(.C) void {
+    if (game_state) |*state| {
+        const dt = state.game.getDeltaTime();
+        state.scene.update(dt);
+        state.game.getPipeline().sync(state.game.getRegistry());
+
+        const re = state.game.getRetainedEngine();
+        re.beginFrame();
+        re.render();
+        re.endFrame();
+    }
+}
+
 pub fn main() !void {
-    // Use page allocator for WASM compatibility
     const allocator = std.heap.page_allocator;
 
     var game = try Game.init(allocator, .{
@@ -97,7 +128,6 @@ pub fn main() !void {
         .clear_color = .{ .r = 30, .g = 35, .b = 45 },
     });
     game.fixPointers();
-    defer game.deinit();
 
     // Apply camera configuration
     game.setCameraPosition(CAMERA_X, CAMERA_Y);
@@ -108,26 +138,22 @@ pub fn main() !void {
     Game.HookDispatcher.emit(.{ .scene_before_load = .{ .name = initial_scene.name, .allocator = allocator } });
 
     var scene = try Loader.load(initial_scene, ctx);
-    defer scene.deinit();
 
     // Emit scene_load hook
     Game.HookDispatcher.emit(.{ .scene_load = .{ .name = initial_scene.name } });
 
-    defer {
-        if (game.getCurrentSceneName() == null) {
-            Game.HookDispatcher.emit(.{ .scene_unload = .{ .name = initial_scene.name } });
-        }
-    }
+    // Store state for callback
+    game_state = .{
+        .game = &game,
+        .scene = &scene,
+        .allocator = allocator,
+    };
 
-    // Main loop - raylib handles browser integration via emscripten
-    while (game.isRunning()) {
-        const dt = game.getDeltaTime();
-        scene.update(dt);
-        game.getPipeline().sync(game.getRegistry());
+    // Use emscripten's main loop - this never returns in WASM
+    // fps=0 means use requestAnimationFrame, simulate_infinite_loop=1 prevents return
+    emscripten.emscripten_set_main_loop_arg(frameCallback, null, 0, 1);
 
-        const re = game.getRetainedEngine();
-        re.beginFrame();
-        re.render();
-        re.endFrame();
-    }
+    // This code is never reached in WASM mode
+    scene.deinit();
+    game.deinit();
 }
