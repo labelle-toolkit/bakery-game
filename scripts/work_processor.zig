@@ -48,9 +48,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 updated_progress.workstation_id,
             });
 
-            // Notify task engine that work is complete (via worker ID)
-            // The engine tracks which workstation the worker is at
-            _ = Context.pickupComplete(worker_id); // Work completion triggers next pickup phase
+            // Notify task engine that work is complete
+            _ = Context.workCompleted(updated_progress.workstation_id);
 
             // Remove the WorkProgress component
             registry.remove(WorkProgress, worker_entity);

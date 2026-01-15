@@ -124,10 +124,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                 // This is the target EIS
                                 game.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
 
-                                // Set game pointers for hook enrichment before calling itemAdded
-                                Context.setGamePointers(registry, game);
-
                                 // Notify engine that item was added to storage
+                                // (registry/game pointers are automatically set via ensureContext)
                                 const storage_id = engine.entityToU64(storage_entity);
                                 _ = Context.itemAdded(storage_id, storage.accepts.?);
 
@@ -148,16 +146,16 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                         }
                     } else {
                         // Regular task store - notify engine
-                        Context.storeComplete(worker_id);
+                        _ = Context.storeCompleted(worker_id);
                     }
                 },
                 .pickup, .transport_pickup => {
                     // Worker arrived to pick up item from storage (task engine managed)
-                    Context.pickupComplete(worker_id);
+                    _ = Context.pickupCompleted(worker_id);
                 },
                 .arrive_at_workstation => {
                     // Worker arrived at workstation to start work
-                    Context.storeComplete(worker_id);
+                    _ = Context.storeCompleted(worker_id);
                 },
             }
 
@@ -188,8 +186,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 // by checking if the old action was .store and there's no MovementTarget now
                 if (old_action == .store and registry.tryGet(MovementTarget, entity) == null) {
                     // This was a dangling item delivery completion, worker is now idle
-                    std.log.info("[WorkerMovement] Calling workerIdle for worker {d}", .{worker_id});
-                    Context.workerIdle(worker_id);
+                    std.log.info("[WorkerMovement] Calling workerAvailable for worker {d}", .{worker_id});
+                    _ = Context.workerAvailable(worker_id);
                 }
             }
         } else {

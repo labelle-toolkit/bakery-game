@@ -83,7 +83,7 @@ pub const GameHooks = struct {
 
     /// Handle worker starting pickup from EIS.
     pub fn pickup_started(payload: anytype) void {
-        log.info("pickup_started: worker={d} storage={d}", .{ payload.worker_id, payload.eis_id });
+        log.info("pickup_started: worker={d} storage={d}", .{ payload.worker_id, payload.storage_id });
         const registry_ptr = payload.registry orelse {
             log.warn("pickup_started: registry is null", .{});
             return;
@@ -91,16 +91,16 @@ pub const GameHooks = struct {
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
         const Position = engine.render.Position;
 
-        const storage_entity = engine.entityFromU64(payload.eis_id);
-        log.info("pickup_started: converted entity ID {d} to entity", .{payload.eis_id});
+        const storage_entity = engine.entityFromU64(payload.storage_id);
+        log.info("pickup_started: converted entity ID {d} to entity", .{payload.storage_id});
 
         const storage_pos = registry.tryGet(Position, storage_entity) orelse {
-            log.warn("pickup_started: storage entity {d} has no Position component", .{payload.eis_id});
+            log.warn("pickup_started: storage entity {d} has no Position component", .{payload.storage_id});
             return;
         };
 
         log.info("pickup_started: storage {d} is at position ({d},{d})", .{
-            payload.eis_id,
+            payload.storage_id,
             storage_pos.x,
             storage_pos.y,
         });
@@ -126,7 +126,7 @@ pub const GameHooks = struct {
         const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
         const Position = engine.render.Position;
 
-        const storage_entity = engine.entityFromU64(payload.eos_id);
+        const storage_entity = engine.entityFromU64(payload.storage_id);
         const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
@@ -270,13 +270,13 @@ pub const GameHooks = struct {
         };
 
         // Find IOS storage and set output item based on what the IOS accepts
-        for (workstation.storages) |storage_id_u64| {
-            const storage_entity = engine.entityFromU64(storage_id_u64);
+        for (workstation.storages) |storage_entity| {
             const storage = registry.tryGet(Storage, storage_entity) orelse continue;
             if (storage.role == .ios) {
                 const output_item = storage.accepts orelse continue;
-                _ = Context.itemAdded(storage_id_u64, output_item);
-                log.info("process_completed: set IOS {d} item to {s}", .{ storage_id_u64, @tagName(output_item) });
+                const storage_id = engine.entityToU64(storage_entity);
+                _ = Context.itemAdded(storage_id, output_item);
+                log.info("process_completed: set IOS {d} item to {s}", .{ storage_id, @tagName(output_item) });
                 break;
             }
         }

@@ -36,8 +36,7 @@ pub fn init(game: *Game, scene: *Scene) void {
     var worker_count: u32 = 0;
     while (worker_iter.next()) |entity| {
         const worker_id = engine.entityToU64(entity);
-        Context.registerWorker(worker_id);
-        Context.workerIdle(worker_id);
+        _ = Context.workerAvailable(worker_id);
         worker_count += 1;
         std.log.info("[TaskInitializer] Registered worker {d} with task engine", .{worker_id});
     }
