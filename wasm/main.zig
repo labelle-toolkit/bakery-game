@@ -94,7 +94,7 @@ const WINDOW_HEIGHT = 768;
 const WINDOW_TITLE = "Bakery Game";
 const TARGET_FPS = 60;
 const CAMERA_X: f32 = -160;
-const CAMERA_Y: f32 = -20;
+const CAMERA_Y: f32 = 20;
 
 // Emscripten C interop (only for WASM)
 const emscripten = if (is_wasm) struct {

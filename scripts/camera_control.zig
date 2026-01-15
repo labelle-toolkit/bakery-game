@@ -43,8 +43,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     var iter = view.entityIterator();
     if (iter.next()) |entity| {
         const pos = view.get(Position, entity);
-        // Center camera on baker position
-        game.setCameraPosition(pos.x, pos.y);
+        // Center camera on baker position (negate y for new engine coordinate system)
+        game.setCameraPosition(pos.x, -pos.y);
     }
 
     const input = game.getInput();
