@@ -43,8 +43,16 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     var iter = view.entityIterator();
     if (iter.next()) |entity| {
         const pos = view.get(Position, entity);
+        // Debug: log position occasionally
+        if (frame_count % 60 == 0) {
+            std.log.info("[CameraControl] Baker at ({d:.1}, {d:.1})", .{ pos.x, pos.y });
+        }
         // Center camera on baker position (negate y for new engine coordinate system)
         game.setCameraPosition(pos.x, -pos.y);
+    } else {
+        if (frame_count % 60 == 0) {
+            std.log.warn("[CameraControl] No baker entity found!", .{});
+        }
     }
 
     const input = game.getInput();
