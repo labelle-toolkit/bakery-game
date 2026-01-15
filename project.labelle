@@ -4,7 +4,7 @@
     .description = "A bakery simulation demonstrating labelle-tasks plugin hooks",
     .engine_version = "0.52.5",
     .initial_scene = "main",
-    .backend = .raylib,
+    .targets = .{ .raylib_desktop, .raylib_wasm },
     .ecs_backend = .zig_ecs,
     .game_id = .u64,
     .window = .{
@@ -21,7 +21,7 @@
     .plugins = .{
         .{
             .name = "labelle-tasks",
-            .path = "../../labelle-tasks",
+            .path = "../labelle-tasks",
             .bind = .{
                 .{ .func = "bind", .arg = "Items", .components = "Storage,Worker,DanglingItem,Workstation" },
             },
