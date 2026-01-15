@@ -60,6 +60,10 @@ pub fn build(b: *std.Build) !void {
         });
         const raylib_artifact = raylib_zig_dep.artifact("raylib");
 
+        // Get raylib's shell.html path
+        const raylib_dep = raylib_zig_dep.builder.dependency("raylib", .{});
+        const shell_path = raylib_dep.path("src/shell.html");
+
         // Create WASM library
         const wasm = b.addLibrary(.{
             .name = "bakery_game",
@@ -82,9 +86,6 @@ pub fn build(b: *std.Build) !void {
         const emcc_settings = emsdk.emccDefaultSettings(b.allocator, .{
             .optimize = optimize,
         });
-
-        // Use custom index.html as shell
-        const shell_path = b.path("index.html");
 
         const emcc_step = emsdk.emccStep(b, raylib_artifact, wasm, .{
             .optimize = optimize,
