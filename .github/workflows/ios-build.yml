@@ -60,14 +60,26 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-path
 
-      - name: Setup zig cache symlinks for sibling dependencies
+      - name: Patch bootstrap to use sibling labelle-engine
         run: |
-          # The packaged labelle-engine references ../labelle-gfx and ../labelle-tasks
-          # from its location in .zig-cache/p/. Create symlinks so these resolve correctly.
-          mkdir -p .zig-cache/p
-          ln -sf ../../../labelle-gfx .zig-cache/p/labelle-gfx
-          ln -sf ../../../labelle-tasks .zig-cache/p/labelle-tasks
-          ls -la .zig-cache/p/
+          # The v0.52.5 tag has path dependencies that don't work in CI.
+          # Patch the bootstrap to use our sibling labelle-engine (which has git URL deps).
+          mkdir -p .labelle-bootstrap
+          cat > .labelle-bootstrap/build.zig.zon << 'EOF'
+          .{
+              .fingerprint = 0x3dda308fa396ad7d,
+              .name = .labelle_bootstrap,
+              .version = "0.0.0",
+              .minimum_zig_version = "0.15.2",
+              .dependencies = .{
+                  .@"labelle-engine" = .{
+                      .path = "../labelle-engine",
+                  },
+              },
+              .paths = .{ "build.zig", "build.zig.zon" },
+          }
+          EOF
+          cat .labelle-bootstrap/build.zig.zon
 
       - name: Generate project files
         run: |
