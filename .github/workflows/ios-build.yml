@@ -78,7 +78,33 @@ jobs:
         run: |
           echo "::group::Building for iOS Simulator"
           # Use sibling labelle-engine via --engine-path to avoid fetching v0.52.5 (has broken path deps)
-          ~/.labelle/bin/labelle ios build --simulator --engine-path=../labelle-engine
+          ~/.labelle/bin/labelle ios build --simulator --engine-path=../labelle-engine || true
+
+          # Workaround: CLI doesn't include plugins in iOS build.zig.zon
+          # Patch to add labelle-tasks dependency
+          if [ -f ios/build.zig.zon ]; then
+            sed -i.bak 's/\.@"labelle-engine" = \.{/.@"labelle-tasks" = .{ .path = "..\/..\/labelle-tasks", },\n        .@"labelle-engine" = .{/' ios/build.zig.zon
+            echo "Patched ios/build.zig.zon to include labelle-tasks"
+            cat ios/build.zig.zon
+          fi
+
+          # Also need to add labelle-tasks import to ios/build.zig
+          if [ -f ios/build.zig ]; then
+            # Add plugin dependency and import after engine dependency
+            sed -i.bak '/const ios_engine = b.dependency/a\
+\
+    // Plugin: labelle-tasks\
+    const ios_labelle_tasks = b.dependency("labelle-tasks", .{\
+        .target = ios_device_target,\
+        .optimize = optimize,\
+    });' ios/build.zig
+            # Add import to main module
+            sed -i.bak 's/\.{ \.name = "labelle-engine", \.module = ios_engine\.module("labelle-engine") },/\&.{ .{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") }, .{ .name = "labelle-tasks", .module = ios_labelle_tasks.module("labelle_tasks") }, },/' ios/build.zig
+            echo "Patched ios/build.zig to include labelle-tasks"
+          fi
+
+          # Retry build
+          cd ios && zig build ios-sim
           echo "::endgroup::"
 
       - name: Verify build artifacts
