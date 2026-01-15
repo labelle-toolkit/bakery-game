@@ -1,7 +1,8 @@
 // Camera control script
-// Camera follows the baker
+// WASD to move camera
 // G to toggle gizmos
 // F12 to take screenshot
+// Tab to toggle camera follow mode
 
 const std = @import("std");
 const engine = @import("labelle-engine");
@@ -15,19 +16,23 @@ const Worker = main.labelle_tasksBindItems.Worker;
 var screenshot_counter: u32 = 0;
 var frame_count: u32 = 0;
 var auto_screenshot_taken: bool = false;
-
+var follow_baker: bool = false; // Start with manual camera control
+var camera_x: f32 = 400.0;
+var camera_y: f32 = 300.0;
 
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
     _ = game;
-    std.log.info("[CameraControl] Camera follows baker, G to toggle gizmos, F12 for screenshot", .{});
+    std.log.info("[CameraControl] WASD to move camera, Tab to follow baker, G for gizmos, F12 for screenshot", .{});
     frame_count = 0;
     auto_screenshot_taken = false;
 }
 
 pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     _ = scene;
-    _ = dt;
+
+    const input = game.getInput();
+    const camera_speed: f32 = 300.0; // pixels per second
 
     // Auto-screenshot after 120 frames (2 seconds) for gizmos demo
     frame_count += 1;
@@ -37,25 +42,59 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         auto_screenshot_taken = true;
     }
 
-    // Follow the baker (entity with Worker component)
-    const registry = game.getRegistry();
-    var view = registry.view(.{ Position, Worker });
-    var iter = view.entityIterator();
-    if (iter.next()) |entity| {
-        const pos = view.get(Position, entity);
-        // Debug: log position occasionally
-        if (frame_count % 60 == 0) {
-            std.log.info("[CameraControl] Baker at ({d:.1}, {d:.1})", .{ pos.x, pos.y });
+    // Tab - Toggle follow mode
+    if (input.isKeyPressed(.tab)) {
+        follow_baker = !follow_baker;
+        std.log.info("[CameraControl] Camera mode: {s}", .{if (follow_baker) "following baker" else "manual control (WASD)"});
+    }
+
+    // Camera control
+    if (follow_baker) {
+        // Follow the baker (entity with Worker component)
+        const registry = game.getRegistry();
+        var view = registry.view(.{ Position, Worker });
+        var iter = view.entityIterator();
+        if (iter.next()) |entity| {
+            const pos = view.get(Position, entity);
+            camera_x = pos.x;
+            camera_y = pos.y;
+            // Debug: log position occasionally
+            if (frame_count % 60 == 0) {
+                std.log.info("[CameraControl] Baker at ({d:.1}, {d:.1})", .{ pos.x, pos.y });
+            }
+        } else {
+            if (frame_count % 60 == 0) {
+                std.log.warn("[CameraControl] No baker entity found!", .{});
+            }
         }
-        // Center camera on baker position (negate y for new engine coordinate system)
-        game.setCameraPosition(pos.x, -pos.y);
     } else {
-        if (frame_count % 60 == 0) {
-            std.log.warn("[CameraControl] No baker entity found!", .{});
+        // Manual camera control with WASD
+        var moved = false;
+
+        if (input.isKeyDown(.w)) {
+            camera_y -= camera_speed * dt;
+            moved = true;
+        }
+        if (input.isKeyDown(.s)) {
+            camera_y += camera_speed * dt;
+            moved = true;
+        }
+        if (input.isKeyDown(.a)) {
+            camera_x -= camera_speed * dt;
+            moved = true;
+        }
+        if (input.isKeyDown(.d)) {
+            camera_x += camera_speed * dt;
+            moved = true;
+        }
+
+        if (moved and frame_count % 30 == 0) {
+            std.log.info("[CameraControl] Camera at ({d:.1}, {d:.1})", .{ camera_x, camera_y });
         }
     }
 
-    const input = game.getInput();
+    // Apply camera position (negate y for engine coordinate system)
+    game.setCameraPosition(camera_x, -camera_y);
 
     // G - Toggle gizmos
     if (input.isKeyPressed(.g)) {

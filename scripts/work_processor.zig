@@ -34,18 +34,23 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         const progress = view.get(worker_entity);
         const worker_id = engine.entityToU64(worker_entity);
 
-        // Tick the progress
-        progress.tick();
+        // Create updated progress with incremented counter
+        var updated_progress = progress.*;
+        updated_progress.tick();
+
+        // Update the component
+        registry.set(worker_entity, updated_progress);
 
         // Check if work is complete
-        if (progress.isComplete()) {
+        if (updated_progress.isComplete()) {
             log.info("Work complete: worker={d} workstation={d}", .{
                 worker_id,
-                progress.workstation_id,
+                updated_progress.workstation_id,
             });
 
-            // Notify task engine that work is complete
-            _ = Context.workCompleted(progress.workstation_id);
+            // Notify task engine that work is complete (via worker ID)
+            // The engine tracks which workstation the worker is at
+            _ = Context.pickupComplete(worker_id); // Work completion triggers next pickup phase
 
             // Remove the WorkProgress component
             registry.remove(WorkProgress, worker_entity);

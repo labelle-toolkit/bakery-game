@@ -20,7 +20,6 @@
                         },
                         .Storage = .{
                             .role = .eis,
-                            .initial_item = null,
                             .accepts = .Flour,
                         },
                     },
@@ -35,7 +34,6 @@
                         },
                         .Storage = .{
                             .role = .eis,
-                            .initial_item = null,
                             .accepts = .Water,
                         },
                     },
@@ -50,7 +48,6 @@
                         },
                         .Storage = .{
                             .role = .iis,
-                            .initial_item = null,
                             .accepts = .Flour,
                         },
                     },
@@ -65,7 +62,6 @@
                         },
                         .Storage = .{
                             .role = .iis,
-                            .initial_item = null,
                             .accepts = .Water,
                         },
                     },
@@ -80,7 +76,6 @@
                         },
                         .Storage = .{
                             .role = .ios,
-                            .initial_item = null,
                             .accepts = .Bread,
                         },
                     },
@@ -95,7 +90,6 @@
                         },
                         .Storage = .{
                             .role = .eos,
-                            .initial_item = null,
                             .accepts = .Bread,
                         },
                     },

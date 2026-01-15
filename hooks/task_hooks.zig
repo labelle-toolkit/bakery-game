@@ -26,12 +26,15 @@ const main = @import("../main.zig");
 const Context = main.labelle_tasksContext;
 
 /// Track which item entity each worker is carrying (worker_id -> item_id)
-var worker_carried_items: std.AutoHashMap(u64, u64) = undefined;
+pub var worker_carried_items: std.AutoHashMap(u64, u64) = undefined;
+/// Track which EIS each dangling item should be delivered to (item_id -> eis_id)
+pub var dangling_item_targets: std.AutoHashMap(u64, u64) = undefined;
 var worker_items_initialized: bool = false;
 
-fn ensureWorkerItemsInit() void {
+pub fn ensureWorkerItemsInit() void {
     if (!worker_items_initialized) {
         worker_carried_items = std.AutoHashMap(u64, u64).init(std.heap.page_allocator);
+        dangling_item_targets = std.AutoHashMap(u64, u64).init(std.heap.page_allocator);
         worker_items_initialized = true;
     }
 }
@@ -80,12 +83,27 @@ pub const GameHooks = struct {
 
     /// Handle worker starting pickup from EIS.
     pub fn pickup_started(payload: anytype) void {
-        log.info("pickup_started: worker={d} storage={d}", .{ payload.worker_id, payload.storage_id });
-        const registry = payload.registry orelse return;
+        log.info("pickup_started: worker={d} storage={d}", .{ payload.worker_id, payload.eis_id });
+        const registry_ptr = payload.registry orelse {
+            log.warn("pickup_started: registry is null", .{});
+            return;
+        };
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
         const Position = engine.render.Position;
 
-        const storage_entity = engine.entityFromU64(payload.storage_id);
-        const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
+        const storage_entity = engine.entityFromU64(payload.eis_id);
+        log.info("pickup_started: converted entity ID {d} to entity", .{payload.eis_id});
+
+        const storage_pos = registry.tryGet(Position, storage_entity) orelse {
+            log.warn("pickup_started: storage entity {d} has no Position component", .{payload.eis_id});
+            return;
+        };
+
+        log.info("pickup_started: storage {d} is at position ({d},{d})", .{
+            payload.eis_id,
+            storage_pos.x,
+            storage_pos.y,
+        });
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
@@ -93,14 +111,22 @@ pub const GameHooks = struct {
             .target_y = storage_pos.y,
             .action = .pickup,
         });
+
+        log.info("pickup_started: set MovementTarget for worker {d} to ({d},{d})", .{
+            payload.worker_id,
+            storage_pos.x,
+            storage_pos.y,
+        });
     }
 
     pub fn store_started(payload: anytype) void {
-        const registry = payload.registry orelse return;
-        const game = payload.game orelse return;
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+        const game_ptr = payload.game orelse return;
+        const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
         const Position = engine.render.Position;
 
-        const storage_entity = engine.entityFromU64(payload.storage_id);
+        const storage_entity = engine.entityFromU64(payload.eos_id);
         const storage_pos = registry.tryGet(Position, storage_entity) orelse return;
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
@@ -126,7 +152,8 @@ pub const GameHooks = struct {
     }
 
     pub fn pickup_dangling_started(payload: anytype) void {
-        const registry = payload.registry orelse return;
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
         const Position = engine.render.Position;
 
         const item_entity = engine.entityFromU64(payload.item_id);
@@ -147,7 +174,8 @@ pub const GameHooks = struct {
 
     /// Handle worker starting transport from EOS to EIS.
     pub fn transport_started(payload: anytype) void {
-        const registry = payload.registry orelse return;
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
         const Position = engine.render.Position;
 
         const from_entity = engine.entityFromU64(payload.from_storage_id);
@@ -171,8 +199,10 @@ pub const GameHooks = struct {
     var delivery_counter: u32 = 0;
 
     pub fn item_delivered(payload: anytype) void {
-        const registry = payload.registry orelse return;
-        const game = payload.game orelse return;
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+        const game_ptr = payload.game orelse return;
+        const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
         const Position = engine.render.Position;
         const Shape = engine.render.Shape;
 
@@ -204,7 +234,8 @@ pub const GameHooks = struct {
     /// Handle worker starting to process at a workstation.
     /// Sets up WorkProgress component to track work time.
     pub fn process_started(payload: anytype) void {
-        const registry = payload.registry orelse return;
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 
         const ws_entity = engine.entityFromU64(payload.workstation_id);
         const workstation = registry.tryGet(Workstation, ws_entity) orelse {
@@ -229,7 +260,8 @@ pub const GameHooks = struct {
     /// For producer workstations (no IIS inputs), this creates the output item
     /// and notifies the engine so it can proceed with the store step.
     pub fn process_completed(payload: anytype) void {
-        const registry = payload.registry orelse return;
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 
         const ws_entity = engine.entityFromU64(payload.workstation_id);
         const workstation = registry.tryGet(Workstation, ws_entity) orelse {
@@ -238,13 +270,13 @@ pub const GameHooks = struct {
         };
 
         // Find IOS storage and set output item based on what the IOS accepts
-        for (workstation.storages) |storage_entity| {
+        for (workstation.storages) |storage_id_u64| {
+            const storage_entity = engine.entityFromU64(storage_id_u64);
             const storage = registry.tryGet(Storage, storage_entity) orelse continue;
             if (storage.role == .ios) {
                 const output_item = storage.accepts orelse continue;
-                const storage_id = engine.entityToU64(storage_entity);
-                _ = Context.itemAdded(storage_id, output_item);
-                log.info("process_completed: set IOS {d} item to {s}", .{ storage_id, @tagName(output_item) });
+                _ = Context.itemAdded(storage_id_u64, output_item);
+                log.info("process_completed: set IOS {d} item to {s}", .{ storage_id_u64, @tagName(output_item) });
                 break;
             }
         }

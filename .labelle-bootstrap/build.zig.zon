@@ -6,7 +6,7 @@
     .dependencies = .{
         .@"labelle-engine" = .{
             .url = "git+https://github.com/labelle-toolkit/labelle-engine?ref=v0.52.2",
-            .hash = "labelle_engine-0.52.2-rhO5vv9zGwBHZX4nfzKiTgwiT6ZeC3gePnknxGL3Vk4Q",
+            .hash = "labelle_engine-0.52.5-rhO5vsd3GwDAwJrxOKXqBTo_98LGhJpgHjyRbr1pKD5m",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon" },

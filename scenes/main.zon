@@ -1,6 +1,6 @@
 .{
     .name = "main",
-    .scripts = .{ "storage_inspector", "worker_movement", "delivery_validator", "camera_control", "work_processor" },
+    .scripts = .{ "oven_builder", "task_initializer", "dangling_item_assigner", "storage_inspector", "worker_movement", "camera_control", "work_processor" },
     .entities = .{
         // Baker (Worker) - will pick up dangling items
         .{
@@ -62,43 +62,43 @@
         // EIS - Flour storage (external input from pantry)
         .{
             .components = .{
+                .Position = .{ .x = 100, .y = 300 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
+                    .color = .{ .r = 100, .g = 150, .b = 100, .a = 255 },
+                },
                 .Storage = .{
                     .role = .eis,
-                    .initial_item = .Flour,
+                    .accepts = .Flour,
                 },
             },
         },
         // EIS - Water storage (external input from pantry)
         .{
             .components = .{
+                .Position = .{ .x = 100, .y = 360 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
+                    .color = .{ .r = 100, .g = 100, .b = 180, .a = 255 },
+                },
                 .Storage = .{
                     .role = .eis,
-                    .initial_item = .Water,
+                    .accepts = .Water,
                 },
             },
         },
-        // EIS - Yeast storage (external input from pantry)
-        .{
-            .components = .{
-                .Storage = .{
-                    .role = .eis,
-                    .initial_item = .Yeast,
-                },
-            },
-        },
-        // Oven Workstation (with IIS defined in prefab)
-        .{ .prefab = "oven" },
-        // Water Well - producer workstation with IOS and EOS only
-        .{ .prefab = "water_well" },
-        // IOS - Bread storage (internal output for oven)
-        .{
-            .components = .{
-                .Storage = .{
-                    .role = .ios,
-                    .initial_item = null,
-                },
-            },
-        },
+        // Oven Workstation (commented out due to nested entity issue)
+        // .{ .prefab = "oven" },
+        // Water Well (commented out due to nested entity issue)
+        // .{ .prefab = "water_well" },
+        // IOS - Bread storage (internal output for oven - commented out)
+        // .{
+        //     .components = .{
+        //         .Storage = .{
+        //             .role = .ios,
+        //         },
+        //     },
+        // },
         // Shelf - visual representation
         .{
             .components = .{
@@ -109,15 +109,14 @@
                 },
             },
         },
-        // EOS - Bread storage (external output to shelf)
-        .{
-            .components = .{
-                .Storage = .{
-                    .role = .eos,
-                    .initial_item = null,
-                },
-            },
-        },
+        // EOS - Bread storage (external output to shelf - commented out)
+        // .{
+        //     .components = .{
+        //         .Storage = .{
+        //             .role = .eos,
+        //         },
+        //     },
+        // },
         // Labels
         .{
             .components = .{
