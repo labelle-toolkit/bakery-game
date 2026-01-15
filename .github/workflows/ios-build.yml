@@ -60,32 +60,14 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-path
 
-      - name: Patch bootstrap to use sibling labelle-engine
+      - name: Generate project files from sibling engine
         run: |
-          # The v0.52.5 tag has path dependencies that don't work in CI.
-          # Patch the bootstrap to use our sibling labelle-engine (which has git URL deps).
-          mkdir -p .labelle-bootstrap
-          cat > .labelle-bootstrap/build.zig.zon << 'EOF'
-          .{
-              .fingerprint = 0x3dda308fa396ad7d,
-              .name = .labelle_bootstrap,
-              .version = "0.0.0",
-              .minimum_zig_version = "0.15.2",
-              .dependencies = .{
-                  .@"labelle-engine" = .{
-                      .path = "../labelle-engine",
-                  },
-              },
-              .paths = .{ "build.zig", "build.zig.zon" },
-          }
-          EOF
-          cat .labelle-bootstrap/build.zig.zon
-
-      - name: Generate project files
-        run: |
-          echo "::group::Generating project files"
-          ~/.labelle/bin/labelle generate
-          echo "::endgroup::"
+          # Run the generator directly from sibling labelle-engine.
+          # This avoids the fetched v0.52.5 tag's path dependency issues.
+          cd ../labelle-engine
+          echo "Running generator for bakery-game..."
+          zig build generate -- ../bakery-game
+          cd ../bakery-game
           echo "Generated .labelle/build.zig.zon:"
           cat .labelle/build.zig.zon
 
