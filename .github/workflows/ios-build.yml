@@ -60,17 +60,6 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-path
 
-      - name: Generate project files from sibling engine
-        run: |
-          # Run the generator directly from sibling labelle-engine.
-          # This avoids the fetched v0.52.5 tag's path dependency issues.
-          cd ../labelle-engine
-          echo "Running generator for bakery-game..."
-          zig build generate -- ../bakery-game
-          cd ../bakery-game
-          echo "Generated .labelle/build.zig.zon:"
-          cat .labelle/build.zig.zon
-
       - name: Build for iOS Simulator
         run: |
           echo "::group::Building for iOS Simulator"
