@@ -60,12 +60,18 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-path
 
-      - name: Generate main.zig
+      - name: Generate project files
         run: |
-          echo "::group::Generating main.zig from project.labelle"
-          # Generate main.zig using sibling engine to avoid fetching v0.52.5
+          echo "::group::Generating project files from project.labelle"
+          # Generate using sibling engine to avoid fetching v0.52.5
           ~/.labelle/bin/labelle generate --engine-path=../labelle-engine
           echo "::endgroup::"
+          # Multi-target generates target-specific files; symlink for iOS compatibility
+          ls -la *_main.zig 2>/dev/null || true
+          if [ ! -f "main.zig" ] && [ -f "raylib_desktop_main.zig" ]; then
+            ln -s raylib_desktop_main.zig main.zig
+            echo "Created symlink: main.zig -> raylib_desktop_main.zig"
+          fi
           ls -la main.zig
 
       - name: Build for iOS Simulator

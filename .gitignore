@@ -15,3 +15,4 @@ zig-cache/
 # OS
 .DS_Store
 *.png
+*_main.zig
