@@ -90,33 +90,20 @@ jobs:
 
           # Patch build.zig to add labelle-tasks dependency and module import
           if [ -f ios/build.zig ]; then
-            python3 << 'PYEOF'
-import re
-
-with open('ios/build.zig', 'r') as f:
-    content = f.read()
-
-# Insert labelle-tasks dependency after ios_engine dependency block
-# Match the entire ios_engine block and add labelle-tasks after it
-engine_pattern = r'(const ios_engine = b\.dependency\("labelle-engine", \.{[^}]+\.backend = \.sokol,\s*}\);)'
-replacement = r'''\1
-    const ios_labelle_tasks = b.dependency("labelle-tasks", .{
-        .target = ios_device_target,
-        .optimize = optimize,
-    });'''
-content = re.sub(engine_pattern, replacement, content, flags=re.DOTALL)
-
-# Add labelle-tasks import alongside labelle-engine in the imports array
-content = content.replace(
-    '.{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") },',
-    '.{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") }, .{ .name = "labelle-tasks", .module = ios_labelle_tasks.module("labelle_tasks") },'
-)
-
-with open('ios/build.zig', 'w') as f:
-    f.write(content)
-
-print("Patched ios/build.zig successfully")
-PYEOF
+            # Write patch script to file to avoid YAML escaping issues
+            cat > /tmp/patch_build.py << 'PYSCRIPT'
+import re, sys
+with open(sys.argv[1], 'r') as f: content = f.read()
+# Insert labelle-tasks dependency after ios_engine block
+pattern = r'(const ios_engine = b\.dependency\("labelle-engine", \.{[^}]+\.backend = \.sokol,\s*}\);)'
+dep_code = '\n    const ios_labelle_tasks = b.dependency("labelle-tasks", .{\n        .target = ios_device_target,\n        .optimize = optimize,\n    });'
+content = re.sub(pattern, r'\1' + dep_code, content, flags=re.DOTALL)
+# Add labelle-tasks import alongside labelle-engine
+content = content.replace('.{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") },', '.{ .name = "labelle-engine", .module = ios_engine.module("labelle-engine") }, .{ .name = "labelle-tasks", .module = ios_labelle_tasks.module("labelle_tasks") },')
+with open(sys.argv[1], 'w') as f: f.write(content)
+print("Patched successfully")
+PYSCRIPT
+            python3 /tmp/patch_build.py ios/build.zig
           fi
 
           # Retry build
