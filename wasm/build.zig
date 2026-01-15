@@ -57,9 +57,6 @@ pub fn build(b: *std.Build) !void {
         });
         const raylib_artifact = raylib_zig_dep.artifact("raylib");
 
-        // Get the actual raylib dependency (raylib_zig depends on raylib)
-        const raylib_dep = raylib_zig_dep.builder.dependency("raylib", .{});
-
         // Create WASM library
         const wasm = b.addLibrary(.{
             .name = "bakery_game",
