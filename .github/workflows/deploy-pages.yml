@@ -37,20 +37,14 @@ jobs:
         with:
           version: 0.15.2
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: '3.1.51'
-
-      - name: Verify Emscripten
-        run: |
-          emcc --version
-          echo "EMSDK: $EMSDK"
+      # Note: emsdk is managed by zig's package system via build.zig.zon
+      # We don't use setup-emsdk action to avoid conflicts
 
       - name: Build WASM
         working-directory: wasm
         run: |
-          # Build for WASM with emscripten target
+          # Zig downloads and manages emsdk via dependency
+          # The emsdk package sets up the sysroot automatically
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm
 
           # List output
