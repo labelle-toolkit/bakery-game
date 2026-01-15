@@ -72,11 +72,11 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         var moved = false;
 
         if (input.isKeyDown(.w)) {
-            camera_y -= camera_speed * dt;
+            camera_y += camera_speed * dt;
             moved = true;
         }
         if (input.isKeyDown(.s)) {
-            camera_y += camera_speed * dt;
+            camera_y -= camera_speed * dt;
             moved = true;
         }
         if (input.isKeyDown(.a)) {
