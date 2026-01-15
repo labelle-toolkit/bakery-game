@@ -26,9 +26,23 @@ jobs:
           repository: labelle-toolkit/labelle-tasks
           path: labelle-tasks
 
-      - name: Move labelle-tasks to parent directory
+      - name: Checkout labelle-gfx (sibling dependency for engine)
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-gfx
+          path: labelle-gfx
+
+      - name: Checkout labelle-engine (sibling dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-engine
+          path: labelle-engine
+
+      - name: Move sibling dependencies to parent directory
         run: |
           mv labelle-tasks ../labelle-tasks
+          mv labelle-gfx ../labelle-gfx
+          mv labelle-engine ../labelle-engine
           ls -la ../
 
       - name: Install Zig
