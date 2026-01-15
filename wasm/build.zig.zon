@@ -3,10 +3,8 @@
     .name = .bakery_game_wasm,
     .version = "0.1.0",
     .dependencies = .{
-        .@"labelle-engine" = .{
-            .url = "git+https://github.com/labelle-toolkit/labelle-engine#v0.52.2",
-            .hash = "labelle_engine-0.52.2-rhO5vv9zGwBHZX4nfzKiTgwiT6ZeC3gePnknxGL3Vk4Q",
-        },
+        // NOTE: labelle-engine is NOT listed here - we get it through labelle-tasks
+        // to avoid diamond dependency (both would use different module instances)
         .@"labelle-tasks" = .{
             .path = "../../labelle-tasks",
         },
