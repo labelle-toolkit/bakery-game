@@ -111,10 +111,13 @@
             }
         })();
 
-        // Hide loading indicator when WASM initializes
-        window.sappInitialized = function() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('footer').style.display = 'none';
+        // Configure Emscripten Module
+        var Module = {
+            canvas: document.getElementById('canvas'),
+            onRuntimeInitialized: function() {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('footer').style.display = 'none';
+            }
         };
 
         // Handle errors
