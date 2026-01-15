@@ -32,15 +32,19 @@ pub fn build(b: *std.Build) !void {
     const engine_mod = engine_dep.module("labelle-engine");
 
     // Get labelle-tasks plugin
+    // Create the module ourselves to use our engine_mod, avoiding diamond dependency
     const labelle_tasks_dep = b.dependency("labelle-tasks", .{
         .target = target,
         .optimize = optimize,
-        .backend = backend,
-        .ecs_backend = ecs_backend,
-        .gui_backend = gui_backend,
-        .physics = false,
     });
-    const labelle_tasks_mod = labelle_tasks_dep.module("labelle_tasks");
+    const ecs_mod = engine_dep.module("ecs");
+    const labelle_tasks_mod = b.addModule("labelle-tasks", .{
+        .root_source_file = labelle_tasks_dep.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    labelle_tasks_mod.addImport("labelle-engine", engine_mod);
+    labelle_tasks_mod.addImport("ecs", ecs_mod);
 
     // Check if targeting emscripten (WASM)
     const is_wasm = target.result.os.tag == .emscripten;
