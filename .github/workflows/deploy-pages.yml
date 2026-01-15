@@ -70,21 +70,20 @@ jobs:
           # Verify sysroot was generated
           ls -la "$EMSDK/upstream/emscripten/cache/sysroot/include/" | head -5
 
-          # Fetch zig dependencies first
-          zig build -Dtarget=wasm32-emscripten --fetch 2>&1 || true
+          # Run zig build once (will fail but installs all SDKs)
+          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm 2>&1 || true
 
-          # Find zig-cached emsdk directories and symlink upstream from system emsdk
+          # After first build attempt, copy sysroot to ALL zig-cached emsdk directories
+          echo "Copying sysroot cache to zig-cached emsdk directories..."
           for dir in .zig-cache/p/N-V-*; do
-            if [ -f "$dir/emsdk" ]; then
-              echo "Found zig-cached emsdk: $dir"
-              # Remove existing upstream dir and symlink to system emsdk
-              rm -rf "$dir/upstream"
-              ln -s "$EMSDK/upstream" "$dir/upstream"
-              echo "Symlinked $dir/upstream -> $EMSDK/upstream"
+            if [ -d "$dir/upstream/emscripten" ]; then
+              echo "Copying sysroot to: $dir"
+              mkdir -p "$dir/upstream/emscripten/cache"
+              cp -r "$EMSDK/upstream/emscripten/cache/sysroot" "$dir/upstream/emscripten/cache/" 2>/dev/null || true
             fi
           done
 
-          # Build for WASM with emscripten target
+          # Build again with sysroot in place
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm
 
           # List output
