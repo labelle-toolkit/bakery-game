@@ -20,19 +20,8 @@ pub fn build(b: *std.Build) !void {
     const ecs_backend: EcsBackend = .zig_ecs;
     _ = GuiBackend; // Not used
 
-    // Get labelle-tasks first - it will create its own labelle-engine
-    const labelle_tasks_dep = b.dependency("labelle-tasks", .{
-        .target = target,
-        .optimize = optimize,
-        .backend = backend,
-        .ecs_backend = ecs_backend,
-        .physics = false,
-    });
-    const labelle_tasks_mod = labelle_tasks_dep.module("labelle_tasks");
-
-    // Get labelle-engine from labelle-tasks's builder to use the same instance
-    // This avoids diamond dependency by not having our own engine_dep
-    const engine_dep = labelle_tasks_dep.builder.dependency("labelle-engine", .{
+    // Get labelle-engine dependency
+    const engine_dep = b.dependency("labelle-engine", .{
         .target = target,
         .optimize = optimize,
         .backend = backend,
@@ -40,6 +29,17 @@ pub fn build(b: *std.Build) !void {
         .physics = false,
     });
     const engine_mod = engine_dep.module("labelle-engine");
+    const ecs_mod = engine_dep.module("ecs");
+
+    // Create labelle_tasks module manually to inject our engine_mod
+    // This avoids the module conflict from using b.dependency()
+    const labelle_tasks_mod = b.addModule("labelle_tasks", .{
+        .root_source_file = b.path("../../labelle-tasks/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    labelle_tasks_mod.addImport("labelle-engine", engine_mod);
+    labelle_tasks_mod.addImport("ecs", ecs_mod);
 
     // Check if targeting emscripten (WASM)
     const is_wasm = target.result.os.tag == .emscripten;
@@ -68,7 +68,7 @@ pub fn build(b: *std.Build) !void {
         const wasm = b.addLibrary(.{
             .name = "bakery_game",
             .root_module = b.createModule(.{
-                .root_source_file = b.path("main.zig"),
+                .root_source_file = b.path("../main.zig"),
                 .target = target,
                 .optimize = optimize,
                 .imports = &.{

@@ -3,11 +3,11 @@
     .name = .bakery_game_wasm,
     .version = "0.1.0",
     .dependencies = .{
-        // NOTE: labelle-engine is NOT listed here - we get it through labelle-tasks
-        // to avoid diamond dependency (both would use different module instances)
-        .@"labelle-tasks" = .{
-            .path = "../../labelle-tasks",
+        .@"labelle-engine" = .{
+            .path = "../../labelle-engine",
         },
+        // NOTE: labelle-tasks is NOT a dependency here - we manually create the module
+        // to avoid diamond dependency (both would use different module instances)
         .raylib_zig = .{
             .url = "git+https://github.com/raylib-zig/raylib-zig#a4d18b2d1cf8fdddec68b5b084535fca0475f466",
             .hash = "raylib_zig-5.6.0-dev-KE8REL5MBQAf3p497t52Xw9P7ojndIkVOWPXnLiLLw2P",
