@@ -60,6 +60,15 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-path
 
+      - name: Setup zig cache symlinks for sibling dependencies
+        run: |
+          # The packaged labelle-engine references ../labelle-gfx and ../labelle-tasks
+          # from its location in .zig-cache/p/. Create symlinks so these resolve correctly.
+          mkdir -p .zig-cache/p
+          ln -sf ../../../labelle-gfx .zig-cache/p/labelle-gfx
+          ln -sf ../../../labelle-tasks .zig-cache/p/labelle-tasks
+          ls -la .zig-cache/p/
+
       - name: Generate project files
         run: |
           echo "::group::Generating project files"
