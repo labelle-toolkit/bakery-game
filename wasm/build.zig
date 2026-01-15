@@ -46,27 +46,33 @@ pub fn build(b: *std.Build) !void {
     });
     labelle_tasks_mod.addImport("labelle-engine", engine_mod);
     labelle_tasks_mod.addImport("ecs", ecs_mod);
-    // Add transitive dependencies that labelle-engine's internal modules need
-    labelle_tasks_mod.addImport("raylib", engine_dep.module("raylib"));
-    labelle_tasks_mod.addImport("sokol", engine_dep.module("sokol"));
+
+    // Add transitive dependencies through the correct dependency chain
+    // labelle-gfx has the raylib and sokol modules
+    const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    labelle_tasks_mod.addImport("labelle", labelle_gfx_dep.module("labelle"));
+    labelle_tasks_mod.addImport("build_options", engine_dep.module("build_options"));
+    // Get raylib through raylib_zig dependency
+    const raylib_zig_dep = labelle_gfx_dep.builder.dependency("raylib_zig", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    labelle_tasks_mod.addImport("raylib", raylib_zig_dep.module("raylib"));
+    // Get sokol through labelle-gfx
+    labelle_tasks_mod.addImport("sokol", labelle_gfx_dep.module("sokol"));
 
     // Check if targeting emscripten (WASM)
     const is_wasm = target.result.os.tag == .emscripten;
 
     if (is_wasm) {
-        // Get labelle-gfx from engine's dependency chain for emsdk setup
-        const labelle_gfx_dep = engine_dep.builder.dependency("labelle-gfx", .{
-            .target = target,
-            .optimize = optimize,
-        });
+        // Use raylib_zig for emsdk setup (already defined above)
         const raylib_zig = @import("raylib_zig");
         const emsdk = raylib_zig.emsdk;
 
-        // Get raylib_zig dependency and raylib artifact through labelle-gfx
-        const raylib_zig_dep = labelle_gfx_dep.builder.dependency("raylib_zig", .{
-            .target = target,
-            .optimize = optimize,
-        });
+        // Get raylib artifact for WASM linking
         const raylib_artifact = raylib_zig_dep.artifact("raylib");
 
         // Create WASM library
