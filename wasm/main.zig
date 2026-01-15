@@ -111,10 +111,18 @@ var global_scene: ?*SceneType = null;
 var global_allocator: std.mem.Allocator = undefined;
 
 // Frame callback for emscripten
+var frame_count: u32 = 0;
 fn frameCallback() callconv(.c) void {
     if (global_game) |game| {
         if (global_scene) |scene| {
             const dt = game.getDeltaTime();
+
+            // Debug logging for first few frames
+            if (frame_count < 5) {
+                std.log.info("Frame {}: dt={d:.4}", .{ frame_count, dt });
+                frame_count += 1;
+            }
+
             scene.update(dt);
             game.getPipeline().sync(game.getRegistry());
 
@@ -122,7 +130,11 @@ fn frameCallback() callconv(.c) void {
             re.beginFrame();
             re.render();
             re.endFrame();
+        } else {
+            std.log.err("global_scene is null!", .{});
         }
+    } else {
+        std.log.err("global_game is null!", .{});
     }
 }
 
@@ -159,6 +171,9 @@ pub fn main() !void {
 
         // Emit scene_load hook
         Game.HookDispatcher.emit(.{ .scene_load = .{ .name = initial_scene.name } });
+
+        std.log.info("WASM: Game and scene initialized successfully", .{});
+        std.log.info("WASM: global_game={any}, global_scene={any}", .{ global_game != null, global_scene != null });
 
         // Use emscripten's main loop - this never returns in WASM
         // fps=0 means use requestAnimationFrame, simulate_infinite_loop=1 prevents return
