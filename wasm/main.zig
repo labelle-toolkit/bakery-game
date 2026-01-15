@@ -96,81 +96,101 @@ const TARGET_FPS = 60;
 const CAMERA_X: f32 = -160;
 const CAMERA_Y: f32 = -20;
 
-// Emscripten-specific code (only compiled for WASM target)
+// Emscripten C interop (only for WASM)
 const emscripten = if (is_wasm) struct {
-    extern fn emscripten_set_main_loop_arg(
-        func: *const fn (?*anyopaque) callconv(.c) void,
-        arg: ?*anyopaque,
+    extern fn emscripten_set_main_loop(
+        func: *const fn () callconv(.c) void,
         fps: c_int,
         simulate_infinite_loop: c_int,
     ) void;
 } else struct {};
 
-// Global state for emscripten callback (only used in WASM)
-const GameState = struct {
-    game: *Game,
-    scene: *SceneType,
-    allocator: std.mem.Allocator,
-};
-var game_state: ?GameState = null;
+// Global state - must be heap-allocated to survive across emscripten callbacks
+var global_game: ?*Game = null;
+var global_scene: ?*SceneType = null;
+var global_allocator: std.mem.Allocator = undefined;
 
-// Frame callback for emscripten (only compiled for WASM)
-fn frameCallback(_: ?*anyopaque) callconv(.c) void {
-    if (game_state) |*state| {
-        const dt = state.game.getDeltaTime();
-        state.scene.update(dt);
-        state.game.getPipeline().sync(state.game.getRegistry());
+// Frame callback for emscripten
+fn frameCallback() callconv(.c) void {
+    if (global_game) |game| {
+        if (global_scene) |scene| {
+            const dt = game.getDeltaTime();
+            scene.update(dt);
+            game.getPipeline().sync(game.getRegistry());
 
-        const re = state.game.getRetainedEngine();
-        re.beginFrame();
-        re.render();
-        re.endFrame();
+            const re = game.getRetainedEngine();
+            re.beginFrame();
+            re.render();
+            re.endFrame();
+        }
     }
 }
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-
-    var game = try Game.init(allocator, .{
-        .window = .{
-            .width = WINDOW_WIDTH,
-            .height = WINDOW_HEIGHT,
-            .title = WINDOW_TITLE,
-            .target_fps = TARGET_FPS,
-        },
-        .clear_color = .{ .r = 30, .g = 35, .b = 45 },
-    });
-    game.fixPointers();
-
-    // Apply camera configuration
-    game.setCameraPosition(CAMERA_X, CAMERA_Y);
-
-    const ctx = engine.SceneContext.init(&game);
-
-    // Emit scene_before_load hook
-    Game.HookDispatcher.emit(.{ .scene_before_load = .{ .name = initial_scene.name, .allocator = allocator } });
-
-    var scene = try Loader.load(initial_scene, ctx);
-
-    // Emit scene_load hook
-    Game.HookDispatcher.emit(.{ .scene_load = .{ .name = initial_scene.name } });
+    global_allocator = std.heap.page_allocator;
 
     if (is_wasm) {
-        // WASM: Store state for callback and use emscripten's main loop
-        game_state = .{
-            .game = &game,
-            .scene = &scene,
-            .allocator = allocator,
-        };
+        // WASM: Allocate game on heap so it survives after main() returns
+        const game = try global_allocator.create(Game);
+        game.* = try Game.init(global_allocator, .{
+            .window = .{
+                .width = WINDOW_WIDTH,
+                .height = WINDOW_HEIGHT,
+                .title = WINDOW_TITLE,
+                .target_fps = TARGET_FPS,
+            },
+            .clear_color = .{ .r = 30, .g = 35, .b = 45 },
+        });
+        game.fixPointers();
+        global_game = game;
+
+        // Apply camera configuration
+        game.setCameraPosition(CAMERA_X, CAMERA_Y);
+
+        const ctx = engine.SceneContext.init(game);
+
+        // Emit scene_before_load hook
+        Game.HookDispatcher.emit(.{ .scene_before_load = .{ .name = initial_scene.name, .allocator = global_allocator } });
+
+        // Allocate scene on heap
+        const scene = try global_allocator.create(SceneType);
+        scene.* = try Loader.load(initial_scene, ctx);
+        global_scene = scene;
+
+        // Emit scene_load hook
+        Game.HookDispatcher.emit(.{ .scene_load = .{ .name = initial_scene.name } });
 
         // Use emscripten's main loop - this never returns in WASM
         // fps=0 means use requestAnimationFrame, simulate_infinite_loop=1 prevents return
-        emscripten.emscripten_set_main_loop_arg(frameCallback, null, 0, 1);
-
-        // This code is never reached in WASM mode
-        scene.deinit();
-        game.deinit();
+        emscripten.emscripten_set_main_loop(frameCallback, 0, 1);
     } else {
+        // Native: Use stack allocation and traditional game loop
+        var game = try Game.init(global_allocator, .{
+            .window = .{
+                .width = WINDOW_WIDTH,
+                .height = WINDOW_HEIGHT,
+                .title = WINDOW_TITLE,
+                .target_fps = TARGET_FPS,
+            },
+            .clear_color = .{ .r = 30, .g = 35, .b = 45 },
+        });
+        defer game.deinit();
+        game.fixPointers();
+
+        // Apply camera configuration
+        game.setCameraPosition(CAMERA_X, CAMERA_Y);
+
+        const ctx = engine.SceneContext.init(&game);
+
+        // Emit scene_before_load hook
+        Game.HookDispatcher.emit(.{ .scene_before_load = .{ .name = initial_scene.name, .allocator = global_allocator } });
+
+        var scene = try Loader.load(initial_scene, ctx);
+        defer scene.deinit();
+
+        // Emit scene_load hook
+        Game.HookDispatcher.emit(.{ .scene_load = .{ .name = initial_scene.name } });
+
         // Native: Use traditional game loop
         while (game.isRunning()) {
             const dt = game.getDeltaTime();
@@ -182,8 +202,5 @@ pub fn main() !void {
             re.render();
             re.endFrame();
         }
-
-        scene.deinit();
-        game.deinit();
     }
 }
