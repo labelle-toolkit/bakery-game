@@ -43,17 +43,20 @@ jobs:
           # First, fetch dependencies by running zig build (will fail but fetches deps)
           zig build -Dtarget=wasm32-emscripten --fetch 2>&1 || true
 
-          # Find the emsdk path in zig's cache (from build.zig.zon hash)
-          # The hash is N-V-__8AAJl1DwBezhYo_VE6f53mPVm00R-Fk28NPW7P14EQ (base64-encoded)
-          ZIG_EMSDK=$(find "$ZIG_GLOBAL_CACHE_DIR/p" -maxdepth 1 -name 'N-V-*' -type d 2>/dev/null | head -1)
-          if [ -z "$ZIG_EMSDK" ]; then
-            echo "Trying to find emsdk via alternate path..."
-            ZIG_EMSDK=$(find ".zig-cache/p" -maxdepth 1 -name 'N-V-*' -type d 2>/dev/null | head -1)
-          fi
+          # Find the emsdk path in zig's cache by looking for the emsdk script
+          echo "Looking for emsdk in zig cache..."
+          ZIG_EMSDK=""
+          for dir in "$ZIG_GLOBAL_CACHE_DIR/p"/N-V-*; do
+            if [ -f "$dir/emsdk" ]; then
+              ZIG_EMSDK="$dir"
+              break
+            fi
+          done
+
           if [ -z "$ZIG_EMSDK" ]; then
             echo "ERROR: Could not find emsdk in zig cache"
             echo "Cache contents:"
-            ls -la "$ZIG_GLOBAL_CACHE_DIR/p/" 2>/dev/null || ls -la ".zig-cache/p/" 2>/dev/null || echo "No cache found"
+            ls -la "$ZIG_GLOBAL_CACHE_DIR/p/" 2>/dev/null | head -20
             exit 1
           fi
           echo "Found zig-cached emsdk at: $ZIG_EMSDK"
@@ -61,7 +64,7 @@ jobs:
           # Set EMSDK to zig's cached version and activate it
           export EMSDK="$ZIG_EMSDK"
 
-          # Install and activate the SDK
+          # Install and activate the SDK (use same version as build.zig.zon: 4.0.9)
           "$EMSDK/emsdk" install 4.0.9
           "$EMSDK/emsdk" activate 4.0.9
           source "$EMSDK/emsdk_env.sh"
