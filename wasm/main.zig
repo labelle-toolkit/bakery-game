@@ -34,6 +34,7 @@ const storage_inspector_script = @import("scripts/storage_inspector.zig");
 const work_processor_script = @import("scripts/work_processor.zig");
 const camera_control_script = @import("scripts/camera_control.zig");
 const delivery_validator_script = @import("scripts/delivery_validator.zig");
+const task_initializer_script = @import("scripts/task_initializer.zig");
 
 const task_hooks_hooks = @import("hooks/task_hooks.zig");
 
@@ -66,6 +67,7 @@ pub const Scripts = engine.ScriptRegistry(struct {
     pub const work_processor = work_processor_script;
     pub const camera_control = camera_control_script;
     pub const delivery_validator = delivery_validator_script;
+    pub const task_initializer = task_initializer_script;
 });
 
 const labelle_tasks_engine_hooks = labelle_tasks.createEngineHooks(GameId, Items, task_hooks_hooks.GameHooks);
