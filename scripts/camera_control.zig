@@ -51,13 +51,15 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     // Camera control
     if (follow_baker) {
         // Follow the baker (entity with Worker component)
+        // Offset by half viewport to center baker on screen
         const registry = game.getRegistry();
         var view = registry.view(.{ Position, Worker });
         var iter = view.entityIterator();
         if (iter.next()) |entity| {
             const pos = view.get(Position, entity);
-            camera_x = pos.x;
-            camera_y = pos.y;
+            // Center on baker by offsetting by half the viewport
+            camera_x = pos.x - 512; // 1024 / 2
+            camera_y = pos.y - 384; // 768 / 2
         }
     } else {
         // Manual camera control with WASD

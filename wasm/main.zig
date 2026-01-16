@@ -96,9 +96,9 @@ const WINDOW_HEIGHT = 768;
 const WINDOW_TITLE = "Bakery Game";
 const TARGET_FPS = 60;
 // Camera starts centered on baker position (400, 300)
-// Note: Y is negated in camera_control script
-const CAMERA_X: f32 = 400;
-const CAMERA_Y: f32 = -300;
+// Offset by half viewport (512, 384) to center, Y negated in script
+const CAMERA_X: f32 = 400 - 512; // -112
+const CAMERA_Y: f32 = -(300 - 384); // 84
 
 // Emscripten C interop (only for WASM)
 const emscripten = if (is_wasm) struct {

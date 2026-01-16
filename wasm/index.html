@@ -161,6 +161,61 @@
             setTimeout(resizeCanvas, 100);
         });
 
+        // Pinch zoom support
+        var currentZoom = 1.0;
+        var minZoom = 0.5;
+        var maxZoom = 3.0;
+        var lastPinchDistance = 0;
+
+        function getDistance(touch1, touch2) {
+            var dx = touch1.clientX - touch2.clientX;
+            var dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function applyZoom() {
+            var canvas = document.getElementById('canvas');
+            canvas.style.transform = 'scale(' + currentZoom + ')';
+        }
+
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 2) {
+                lastPinchDistance = getDistance(e.touches[0], e.touches[1]);
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', function(e) {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                var distance = getDistance(e.touches[0], e.touches[1]);
+                if (lastPinchDistance > 0) {
+                    var delta = distance / lastPinchDistance;
+                    currentZoom = Math.min(maxZoom, Math.max(minZoom, currentZoom * delta));
+                    applyZoom();
+                }
+                lastPinchDistance = distance;
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', function(e) {
+            if (e.touches.length < 2) {
+                lastPinchDistance = 0;
+            }
+        });
+
+        // Double-tap to reset zoom
+        var lastTap = 0;
+        document.addEventListener('touchend', function(e) {
+            if (e.touches.length === 0) {
+                var now = Date.now();
+                if (now - lastTap < 300) {
+                    currentZoom = 1.0;
+                    applyZoom();
+                }
+                lastTap = now;
+            }
+        });
+
         // Configure Emscripten Module
         var Module = {
             canvas: document.getElementById('canvas'),
