@@ -153,17 +153,40 @@ pub const GameHooks = struct {
     }
 
     pub fn pickup_dangling_started(payload: anytype) void {
-        const registry_ptr = payload.registry orelse return;
+        log.info("pickup_dangling_started: worker={d} item={d}", .{ payload.worker_id, payload.item_id });
+
+        const registry_ptr = payload.registry orelse {
+            log.err("pickup_dangling_started: registry is null", .{});
+            return;
+        };
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
         const Position = engine.render.Position;
 
         const item_entity = engine.entityFromU64(payload.item_id);
-        const item_pos = registry.tryGet(Position, item_entity) orelse return;
+        const item_pos = registry.tryGet(Position, item_entity) orelse {
+            log.err("pickup_dangling_started: item {d} has no Position", .{payload.item_id});
+            return;
+        };
 
         // Get the item type from DanglingItem component
         const BoundTypes = @import("labelle-tasks").bind(Items);
         const DanglingItem = BoundTypes.DanglingItem;
-        const dangling_item = registry.tryGet(DanglingItem, item_entity) orelse return;
+        const dangling_item = registry.tryGet(DanglingItem, item_entity) orelse {
+            log.err("pickup_dangling_started: item {d} has no DanglingItem component", .{payload.item_id});
+            // Still track the worker->item mapping even without item type info
+            ensureWorkerItemsInit();
+            worker_carried_items.put(payload.worker_id, payload.item_id) catch {};
+            // Set MovementTarget anyway
+            const worker_entity = engine.entityFromU64(payload.worker_id);
+            registry.set(worker_entity, MovementTarget{
+                .target_x = item_pos.x,
+                .target_y = item_pos.y,
+                .action = .pickup_dangling,
+            });
+            return;
+        };
+
+        log.info("pickup_dangling_started: item type is {s}", .{@tagName(dangling_item.item_type)});
 
         // Track which item this worker will pick up
         ensureWorkerItemsInit();
@@ -172,6 +195,7 @@ pub const GameHooks = struct {
         // Find the EIS that accepts this item type and track it
         var storage_view = registry.view(.{ Storage, Position });
         var storage_iter = storage_view.entityIterator();
+        var found_eis = false;
         while (storage_iter.next()) |storage_entity| {
             const storage = storage_view.get(Storage, storage_entity);
             if (storage.role == .eis and storage.accepts == dangling_item.item_type) {
@@ -182,8 +206,12 @@ pub const GameHooks = struct {
                     @tagName(dangling_item.item_type),
                     storage_id,
                 });
+                found_eis = true;
                 break;
             }
+        }
+        if (!found_eis) {
+            log.err("pickup_dangling_started: no EIS found for item type {s}", .{@tagName(dangling_item.item_type)});
         }
 
         // Set MovementTarget component on the worker
