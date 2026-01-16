@@ -51,10 +51,12 @@ pub fn build(b: *std.Build) !void {
     const raylib_dep = raylib_zig_dep.builder.dependency("raylib", .{});
 
     // Create WASM library
+    // Note: For CI, main.zig and its dependencies are copied to this directory
+    // For local builds, copy main.zig here or adjust the path as needed
     const wasm = b.addLibrary(.{
         .name = "bakery_game",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("../main.zig"),
+            .root_source_file = b.path("main.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{

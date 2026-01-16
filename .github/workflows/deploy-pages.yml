@@ -53,7 +53,8 @@ jobs:
 
       - name: Copy shared files to wasm directory
         run: |
-          # Copy shared directories that wasm/main.zig imports
+          # Copy main.zig and shared directories that it imports
+          cp main.zig wasm/
           cp -r enums wasm/
           cp -r prefabs wasm/
           cp -r components wasm/
