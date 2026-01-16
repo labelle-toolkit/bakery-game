@@ -51,23 +51,22 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     // Camera control
     if (follow_baker) {
         // Follow the baker (entity with Worker component)
-        // Offset by half viewport to center baker on screen
         const registry = game.getRegistry();
         var view = registry.view(.{ Position, Worker });
         var iter = view.entityIterator();
         if (iter.next()) |entity| {
             const pos = view.get(Position, entity);
-            // Center on baker by offsetting by half the viewport
-            camera_x = pos.x - 512; // 1024 / 2
-            camera_y = pos.y - 384; // 768 / 2
+            // Set camera directly to baker position (camera target = center of view)
+            camera_x = pos.x;
+            camera_y = pos.y;
         }
     } else {
         // Manual camera control with WASD
         if (input.isKeyDown(.w)) {
-            camera_y += camera_speed * dt;
+            camera_y -= camera_speed * dt;
         }
         if (input.isKeyDown(.s)) {
-            camera_y -= camera_speed * dt;
+            camera_y += camera_speed * dt;
         }
         if (input.isKeyDown(.a)) {
             camera_x -= camera_speed * dt;
@@ -77,8 +76,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         }
     }
 
-    // Apply camera position (negate y for engine coordinate system)
-    game.setCameraPosition(camera_x, -camera_y);
+    // Apply camera position directly (target = center of view)
+    game.setCameraPosition(camera_x, camera_y);
 
     // G - Toggle gizmos
     if (input.isKeyPressed(.g)) {
