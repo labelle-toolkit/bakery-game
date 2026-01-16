@@ -16,7 +16,7 @@ const Worker = main.labelle_tasksBindItems.Worker;
 var screenshot_counter: u32 = 0;
 var frame_count: u32 = 0;
 var auto_screenshot_taken: bool = false;
-var follow_baker: bool = false; // Start with manual camera control
+var follow_baker: bool = true; // Start following baker (no keyboard on mobile)
 var camera_x: f32 = 400.0;
 var camera_y: f32 = 300.0;
 
