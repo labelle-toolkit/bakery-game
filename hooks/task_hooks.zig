@@ -33,8 +33,9 @@ var worker_items_initialized: bool = false;
 
 pub fn ensureWorkerItemsInit() void {
     if (!worker_items_initialized) {
-        worker_carried_items = std.AutoHashMap(u64, u64).init(std.heap.page_allocator);
-        dangling_item_targets = std.AutoHashMap(u64, u64).init(std.heap.page_allocator);
+        // Use c_allocator for WASM compatibility (page_allocator doesn't work in WASM)
+        worker_carried_items = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
+        dangling_item_targets = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         worker_items_initialized = true;
     }
 }
