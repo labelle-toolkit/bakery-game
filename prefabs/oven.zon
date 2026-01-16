@@ -6,7 +6,7 @@
             .color = .{ .r = 200, .g = 80, .b = 50, .a = 255 },
         },
         .Workstation = .{
-            .process_duration = 120,
+            .process_duration = 5,
             // Nested storages - each Storage has its own role and will auto-attach
             // to this workstation via parent reference (RFC #169)
             .storages = .{
