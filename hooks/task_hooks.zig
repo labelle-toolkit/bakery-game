@@ -171,7 +171,6 @@ pub const GameHooks = struct {
         };
 
         // Get the item type from DanglingItem component
-        const BoundTypes = @import("labelle-tasks").bind(Items);
         const DanglingItem = BoundTypes.DanglingItem;
         const dangling_item = registry.tryGet(DanglingItem, item_entity) orelse {
             log.err("pickup_dangling_started: item {d} has no DanglingItem component", .{payload.item_id});
