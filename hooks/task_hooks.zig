@@ -53,6 +53,7 @@ pub const GameHooks = struct {
     /// Only handles workstation arrival - storage movements are handled by
     /// pickup_started and store_started hooks.
     pub fn movement_started(payload: anytype) void {
+        std.debug.print("[HOOK] movement_started: worker={d} target={d}\n", .{ payload.worker_id, payload.target });
         const tasks = @import("labelle-tasks");
         log.info("movement_started: worker={d} target={d} type={s}", .{
             payload.worker_id,
@@ -153,6 +154,7 @@ pub const GameHooks = struct {
     }
 
     pub fn pickup_dangling_started(payload: anytype) void {
+        std.debug.print("[HOOK] pickup_dangling_started: worker={d} item={d}\n", .{ payload.worker_id, payload.item_id });
         log.info("pickup_dangling_started: worker={d} item={d}", .{ payload.worker_id, payload.item_id });
 
         const registry_ptr = payload.registry orelse {
