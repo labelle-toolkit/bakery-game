@@ -27,12 +27,6 @@ jobs:
           repository: labelle-toolkit/labelle-engine
           path: labelle-engine
 
-      - name: Checkout labelle-gfx
-        uses: actions/checkout@v4
-        with:
-          repository: labelle-toolkit/labelle-gfx
-          path: labelle-gfx
-
       - name: Checkout labelle-tasks
         uses: actions/checkout@v4
         with:
@@ -42,7 +36,6 @@ jobs:
       - name: Move dependencies to parent directory
         run: |
           mv labelle-engine ../labelle-engine
-          mv labelle-gfx ../labelle-gfx
           mv labelle-tasks ../labelle-tasks
           ls -la ../
 
@@ -51,84 +44,31 @@ jobs:
         with:
           version: 0.15.2
 
-      - name: Copy shared files to wasm directory
+      - name: Generate build files
+        working-directory: ../labelle-engine
         run: |
-          # Copy shared directories that wasm/main.zig imports
-          # Note: wasm/main.zig is tracked separately in the wasm directory
-          cp -r enums wasm/
-          cp -r prefabs wasm/
-          cp -r components wasm/
-          cp -r scripts wasm/
-          cp -r hooks wasm/
-          cp -r scenes wasm/
-          echo "=== Copied shared directories ==="
-          ls -la wasm/
-
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: 4.0.9
-          actions-cache-folder: 'emsdk-cache'
+          zig build generate -- ../bakery-game
+          echo "=== Generated files ==="
+          ls -la ../bakery-game/.labelle/
 
       - name: Build WASM
-        working-directory: wasm
+        working-directory: .labelle
         run: |
-          # Verify emscripten is available and generate sysroot cache
-          emcc --version
-          echo "EMSDK=$EMSDK"
-
-          # Generate sysroot by compiling a simple test file
-          echo "int main() { return 0; }" > /tmp/test.c
-          emcc /tmp/test.c -o /tmp/test.js
-          rm -f /tmp/test.c /tmp/test.js /tmp/test.wasm
-
-          # Verify sysroot was generated
-          echo "=== EMSDK sysroot contents ==="
-          ls -la "$EMSDK/upstream/emscripten/cache/sysroot/include/" | head -10
-
-          # Pre-create the sysroot in zig's expected location BEFORE building
-          # Find where zig-raylib expects emscripten by checking the hash
-          echo "=== Pre-building to discover zig-cache paths ==="
-          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm 2>&1 || true
-
-          # Copy sysroot to ALL zig-cached emsdk directories (they look like N-V-__8AA...)
-          echo "=== Copying sysroot to zig-cached emsdk directories ==="
-          find .zig-cache/p -maxdepth 1 -type d -name 'N-V-*' | while read dir; do
-            if [ -d "$dir/upstream/emscripten" ]; then
-              echo "Copying sysroot to: $dir"
-              mkdir -p "$dir/upstream/emscripten/cache"
-              cp -r "$EMSDK/upstream/emscripten/cache/sysroot" "$dir/upstream/emscripten/cache/"
-              ls -la "$dir/upstream/emscripten/cache/sysroot/include/" | head -3
-            fi
-          done
-
-          # Build again with sysroot in place
-          echo "=== Final build ==="
-          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast wasm
+          cp raylib_wasm_build.zig.zon build.zig.zon
+          zig build --build-file raylib_wasm_build.zig -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast -p raylib_wasm/zig-out
 
           # List output
           echo "=== Build output ==="
-          ls -la zig-out/web/ || ls -la zig-out/
+          ls -la raylib_wasm/zig-out/web/
 
       - name: Prepare deployment
         run: |
           mkdir -p dist
 
-          # Copy WASM build artifacts
-          if [ -d "wasm/zig-out/web" ]; then
-            cp -r wasm/zig-out/web/* dist/
-          else
-            cp wasm/zig-out/bin/*.wasm dist/ 2>/dev/null || true
-            cp wasm/zig-out/bin/*.js dist/ 2>/dev/null || true
-            cp wasm/zig-out/bin/*.html dist/ 2>/dev/null || true
-          fi
+          # Copy WASM build artifacts from new generator location
+          cp -r .labelle/raylib_wasm/zig-out/web/* dist/
 
-          # Copy index.html if not already present
-          if [ ! -f "dist/index.html" ]; then
-            cp wasm/index.html dist/
-          fi
-
-          # Rename bakery_game.html to index.html if it exists
+          # Rename bakery_game.html to index.html
           if [ -f "dist/bakery_game.html" ]; then
             mv dist/bakery_game.html dist/index.html
           fi
