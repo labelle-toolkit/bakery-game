@@ -52,13 +52,17 @@ jobs:
           ls -la ../bakery-game/.labelle/
 
       - name: Build WASM
+        working-directory: .labelle
         run: |
-          # Build from project root (not .labelle subdirectory)
-          zig build --build-file .labelle/raylib_wasm_build.zig -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast --prefix .labelle/raylib_wasm/zig-out
+          # Copy the build.zig.zon to be used by Zig's build system
+          cp raylib_wasm_build.zig.zon build.zig.zon
+          
+          # Build WASM target
+          zig build --build-file raylib_wasm_build.zig -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast --prefix raylib_wasm/zig-out
 
           # List output
           echo "=== Build output ==="
-          ls -la .labelle/raylib_wasm/zig-out/web/
+          ls -la raylib_wasm/zig-out/web/
 
       - name: Prepare deployment
         run: |
