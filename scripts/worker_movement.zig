@@ -146,11 +146,12 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                     // Remove DanglingItem component - item is now being carried
                                     registry.remove(DanglingItem, item_entity);
 
-                                    // Attach item to worker
+                                    // Attach item to worker (parent/child relationship)
                                     game.setParent(item_entity, entity) catch |err| {
                                         std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
                                     };
                                     game.setLocalPositionXY(item_entity, 0, 10);
+                                    std.log.info("[WorkerMovement] Attached item {d} to worker {d} (parent/child)", .{ item_id, worker_id });
 
                                     // Track the item for delivery completion
                                     task_hooks.ensureWorkerItemsInit();
@@ -287,6 +288,22 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             const move_x = (dx / dist) * move_dist;
             const move_y = (dy / dist) * move_dist;
             game.moveLocalPosition(entity, move_x, move_y);
+
+            // Debug: log worker and carried item positions every ~60 frames
+            const worker_id = engine.entityToU64(entity);
+            task_hooks.ensureWorkerItemsInit();
+            if (task_hooks.worker_carried_items.get(worker_id)) |item_id| {
+                const item_entity = engine.entityFromU64(item_id);
+                if (registry.tryGet(Position, item_entity)) |item_pos| {
+                    // Log occasionally (when worker x is near a multiple of 50)
+                    const worker_x_int: i32 = @intFromFloat(pos.x);
+                    if (@mod(worker_x_int, 100) < 3) {
+                        std.log.info("[WorkerMovement] Worker {d} at ({d:.0},{d:.0}), item {d} at ({d:.0},{d:.0})", .{
+                            worker_id, pos.x, pos.y, item_id, item_pos.x, item_pos.y,
+                        });
+                    }
+                }
+            }
         }
     }
 }
