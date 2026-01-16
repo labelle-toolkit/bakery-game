@@ -160,9 +160,31 @@ pub const GameHooks = struct {
         const item_entity = engine.entityFromU64(payload.item_id);
         const item_pos = registry.tryGet(Position, item_entity) orelse return;
 
+        // Get the item type from DanglingItem component
+        const BoundTypes = @import("labelle-tasks").bind(Items);
+        const DanglingItem = BoundTypes.DanglingItem;
+        const dangling_item = registry.tryGet(DanglingItem, item_entity) orelse return;
+
         // Track which item this worker will pick up
         ensureWorkerItemsInit();
         worker_carried_items.put(payload.worker_id, payload.item_id) catch {};
+
+        // Find the EIS that accepts this item type and track it
+        var storage_view = registry.view(.{ Storage, Position });
+        var storage_iter = storage_view.entityIterator();
+        while (storage_iter.next()) |storage_entity| {
+            const storage = storage_view.get(Storage, storage_entity);
+            if (storage.role == .eis and storage.accepts == dangling_item.item_type) {
+                const storage_id = engine.entityToU64(storage_entity);
+                dangling_item_targets.put(payload.item_id, storage_id) catch {};
+                log.info("pickup_dangling_started: item {d} ({s}) -> EIS {d}", .{
+                    payload.item_id,
+                    @tagName(dangling_item.item_type),
+                    storage_id,
+                });
+                break;
+            }
+        }
 
         // Set MovementTarget component on the worker
         const worker_entity = engine.entityFromU64(payload.worker_id);
