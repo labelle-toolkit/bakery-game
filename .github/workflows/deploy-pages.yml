@@ -51,21 +51,14 @@ jobs:
           echo "=== Generated files ==="
           ls -la ../bakery-game/.labelle/
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: 4.0.3
-          actions-cache-folder: 'emsdk-cache'
-
       - name: Build WASM
         run: |
-          cd .labelle
-          cp raylib_wasm_build.zig.zon build.zig.zon
-          zig build --build-file raylib_wasm_build.zig -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast -p raylib_wasm/zig-out
+          # Build from project root (not .labelle subdirectory)
+          zig build --build-file .labelle/raylib_wasm_build.zig -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast --prefix .labelle/raylib_wasm/zig-out
 
           # List output
           echo "=== Build output ==="
-          ls -la raylib_wasm/zig-out/web/
+          ls -la .labelle/raylib_wasm/zig-out/web/
 
       - name: Prepare deployment
         run: |
