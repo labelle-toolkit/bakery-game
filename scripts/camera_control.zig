@@ -76,8 +76,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         }
     }
 
-    // Apply camera position (negate Y - camera uses Y-up, entities use Y-down)
-    game.setCameraPosition(camera_x, -camera_y);
+    // Apply camera position (transform Y: camera Y=0 is at screen bottom)
+    game.setCameraPosition(camera_x, 768 - camera_y);
 
     // G - Toggle gizmos
     if (input.isKeyPressed(.g)) {

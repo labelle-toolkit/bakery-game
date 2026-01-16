@@ -95,9 +95,9 @@ const WINDOW_WIDTH = 1024;
 const WINDOW_HEIGHT = 768;
 const WINDOW_TITLE = "Bakery Game";
 const TARGET_FPS = 60;
-// Camera starts at baker position (400, 300) - Y negated for camera coordinate system
+// Camera starts at baker position (400, 300) - Y transformed: 768 - bakerY
 const CAMERA_X: f32 = 400;
-const CAMERA_Y: f32 = -300;
+const CAMERA_Y: f32 = 768 - 300; // = 468
 
 // Emscripten C interop (only for WASM)
 const emscripten = if (is_wasm) struct {
