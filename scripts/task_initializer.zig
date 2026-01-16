@@ -45,8 +45,13 @@ pub fn init(game: *Game, scene: *Scene) void {
 
     // 2. Manually assign dangling item pickups to idle workers
     // (Dangling items are not managed by task engine, we handle them manually)
+    // Only assign ONE item per worker - remaining items will be assigned after delivery
     var dangling_view = registry.view(.{ DanglingItem, Position });
     var dangling_iter = dangling_view.entityIterator();
+
+    // Track which workers have been assigned to avoid double-assignment
+    var assigned_workers = std.AutoHashMap(u64, void).init(std.heap.page_allocator);
+    defer assigned_workers.deinit();
 
     var assigned_pickups: u32 = 0;
     while (dangling_iter.next()) |dangling_entity| {
@@ -68,10 +73,16 @@ pub fn init(game: *Game, scene: *Scene) void {
 
             const storage_id = engine.entityToU64(storage_entity);
 
-            // Find an available worker (try the first one for simplicity)
+            // Find an available worker that hasn't been assigned yet
             worker_iter = worker_view.entityIterator();
-            if (worker_iter.next()) |worker_entity| {
+            var found_worker = false;
+            while (worker_iter.next()) |worker_entity| {
                 const worker_id = engine.entityToU64(worker_entity);
+
+                // Skip workers that already have an assignment
+                if (assigned_workers.contains(worker_id)) {
+                    continue;
+                }
 
                 // Assign worker to pick up this dangling item
                 registry.set(worker_entity, MovementTarget{
@@ -86,6 +97,9 @@ pub fn init(game: *Game, scene: *Scene) void {
                 // Track which EIS this item should be delivered to
                 task_hooks.dangling_item_targets.put(dangling_id, storage_id) catch {};
 
+                // Mark this worker as assigned
+                assigned_workers.put(worker_id, {}) catch {};
+
                 std.log.info("[TaskInitializer] Assigned worker {d} to pick up dangling item {d} ({s}) and deliver to EIS {d}", .{
                     worker_id,
                     dangling_id,
@@ -94,8 +108,10 @@ pub fn init(game: *Game, scene: *Scene) void {
                 });
 
                 assigned_pickups += 1;
+                found_worker = true;
                 break;
             }
+            if (found_worker) break;
         }
     }
 
