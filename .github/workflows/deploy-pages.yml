@@ -21,14 +21,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout labelle-engine
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-engine
+          path: labelle-engine
+
+      - name: Checkout labelle-gfx
+        uses: actions/checkout@v4
+        with:
+          repository: labelle-toolkit/labelle-gfx
+          path: labelle-gfx
+
       - name: Checkout labelle-tasks
         uses: actions/checkout@v4
         with:
           repository: labelle-toolkit/labelle-tasks
           path: labelle-tasks
 
-      - name: Move labelle-tasks to parent directory
+      - name: Move dependencies to parent directory
         run: |
+          mv labelle-engine ../labelle-engine
+          mv labelle-gfx ../labelle-gfx
           mv labelle-tasks ../labelle-tasks
           ls -la ../
 
