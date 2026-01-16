@@ -47,9 +47,6 @@ pub fn build(b: *std.Build) !void {
     });
     const raylib_artifact = raylib_zig_dep.artifact("raylib");
 
-    // Get the actual raylib dependency (raylib_zig depends on raylib)
-    const raylib_dep = raylib_zig_dep.builder.dependency("raylib", .{});
-
     // Create WASM library
     // Note: For CI, main.zig and its dependencies are copied to this directory
     // For local builds, copy main.zig here or adjust the path as needed
@@ -79,8 +76,8 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    // Get the shell.html path from raylib_zig's internal raylib dependency
-    const shell_path = raylib_dep.path("src/shell.html");
+    // Use our custom index.html as the shell template
+    const shell_path = b.path("index.html");
 
     const emcc_step = emsdk.emccStep(b, raylib_artifact, wasm, .{
         .optimize = optimize,
