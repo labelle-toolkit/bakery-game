@@ -112,51 +112,76 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             switch (target.action) {
                 .pickup_dangling => {
                     // Worker picked up a dangling item
-                    // Now assign them to deliver it to the appropriate EIS
-                    task_hooks.ensureWorkerItemsInit();
-                    std.log.info("[WorkerMovement] pickup_dangling: looking up worker {d} in worker_carried_items", .{worker_id});
-                    if (task_hooks.worker_carried_items.get(worker_id)) |item_id| {
-                        std.log.info("[WorkerMovement] pickup_dangling: found item {d} for worker {d}", .{ item_id, worker_id });
-                        const item_entity = engine.entityFromU64(item_id);
+                    // Find item at current position and deliver to matching EIS
+                    std.log.info("[WorkerMovement] pickup_dangling: worker {d} at ({d},{d})", .{ worker_id, pos.x, pos.y });
 
-                        // Remove DanglingItem component - item is now being carried
-                        registry.remove(DanglingItem, item_entity);
+                    // Find the dangling item at this position
+                    var item_found = false;
+                    var dangling_view = registry.view(.{ DanglingItem, Position });
+                    var dangling_iter = dangling_view.entityIterator();
 
-                        // Attach item to worker
-                        game.setParent(item_entity, entity) catch |err| {
-                            std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
-                        };
-                        game.setLocalPositionXY(item_entity, 0, 10);
+                    while (dangling_iter.next()) |item_entity| {
+                        const item_pos = dangling_view.get(Position, item_entity);
+                        const dist_to_item = @sqrt((item_pos.x - pos.x) * (item_pos.x - pos.x) + (item_pos.y - pos.y) * (item_pos.y - pos.y));
 
-                        // Get the target EIS for this item
-                        std.log.info("[WorkerMovement] pickup_dangling: looking up item {d} in dangling_item_targets", .{item_id});
-                        if (task_hooks.dangling_item_targets.get(item_id)) |target_eis_id| {
-                            std.log.info("[WorkerMovement] pickup_dangling: found EIS {d} for item {d}", .{ target_eis_id, item_id });
-                            const target_eis_entity = engine.entityFromU64(target_eis_id);
-                            if (registry.tryGet(Position, target_eis_entity)) |target_pos| {
-                                std.log.info("[WorkerMovement] pickup_dangling: EIS {d} position is ({d},{d})", .{ target_eis_id, target_pos.x, target_pos.y });
-                                // Assign worker to deliver to this EIS
-                                registry.set(entity, MovementTarget{
-                                    .target_x = target_pos.x,
-                                    .target_y = target_pos.y,
-                                    .action = .store,
-                                });
+                        if (dist_to_item < 20.0) {
+                            const dangling_item = dangling_view.get(DanglingItem, item_entity);
+                            const item_id = engine.entityToU64(item_entity);
+                            std.log.info("[WorkerMovement] pickup_dangling: found item {d} ({s}) at distance {d}", .{
+                                item_id,
+                                @tagName(dangling_item.item_type),
+                                dist_to_item,
+                            });
 
-                                std.log.info("[WorkerMovement] Worker {d} picked up item {d}, now delivering to EIS {d} at ({d},{d})", .{
-                                    worker_id,
-                                    item_id,
-                                    target_eis_id,
-                                    target_pos.x,
-                                    target_pos.y,
-                                });
-                            } else {
-                                std.log.err("[WorkerMovement] pickup_dangling: EIS {d} has no Position!", .{target_eis_id});
+                            // Find matching EIS for this item type
+                            var storage_view = registry.view(.{ Storage, Position });
+                            var storage_iter = storage_view.entityIterator();
+
+                            while (storage_iter.next()) |storage_entity| {
+                                const storage = storage_view.get(Storage, storage_entity);
+                                if (storage.role == .eis and storage.accepts == dangling_item.item_type) {
+                                    const storage_pos = storage_view.get(Position, storage_entity);
+                                    const storage_id = engine.entityToU64(storage_entity);
+
+                                    // Remove DanglingItem component - item is now being carried
+                                    registry.remove(DanglingItem, item_entity);
+
+                                    // Attach item to worker
+                                    game.setParent(item_entity, entity) catch |err| {
+                                        std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
+                                    };
+                                    game.setLocalPositionXY(item_entity, 0, 10);
+
+                                    // Track the item for delivery completion
+                                    task_hooks.ensureWorkerItemsInit();
+                                    task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
+
+                                    // Assign worker to deliver to this EIS
+                                    registry.set(entity, MovementTarget{
+                                        .target_x = storage_pos.x,
+                                        .target_y = storage_pos.y,
+                                        .action = .store,
+                                    });
+
+                                    std.log.info("[WorkerMovement] Worker {d} picked up item {d} ({s}), delivering to EIS {d} at ({d},{d})", .{
+                                        worker_id,
+                                        item_id,
+                                        @tagName(dangling_item.item_type),
+                                        storage_id,
+                                        storage_pos.x,
+                                        storage_pos.y,
+                                    });
+
+                                    item_found = true;
+                                    break;
+                                }
                             }
-                        } else {
-                            std.log.err("[WorkerMovement] pickup_dangling: item {d} not found in dangling_item_targets!", .{item_id});
+                            if (item_found) break;
                         }
-                    } else {
-                        std.log.err("[WorkerMovement] pickup_dangling: worker {d} not found in worker_carried_items!", .{worker_id});
+                    }
+
+                    if (!item_found) {
+                        std.log.warn("[WorkerMovement] pickup_dangling: no dangling item found at worker position!", .{});
                     }
                 },
                 .store => {
