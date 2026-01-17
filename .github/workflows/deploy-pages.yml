@@ -37,62 +37,24 @@ jobs:
         run: |
           mv labelle-engine ../labelle-engine
           mv labelle-tasks ../labelle-tasks
-          ls -la ../
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
           version: 0.15.2
 
-      - name: Build generator
-        working-directory: ../labelle-engine
-        run: zig build
-
-      - name: Generate build files
-        run: |
-          # Run generator from the bakery-game directory
-          ENGINE_PATH="${GITHUB_WORKSPACE}/../labelle-engine"
-
-          # Run the generator binary directly (not through zig build)
-          "${ENGINE_PATH}/zig-out/bin/labelle-generate" --engine-path="${ENGINE_PATH}"
-
-          echo "=== Generated files ==="
-          ls -la .labelle/
-          ls -la .labelle/raylib_wasm/
-
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: 3.1.51
 
-      - name: Populate emsdk sysroot
-        run: |
-          # Compile a minimal C file to force sysroot population
-          echo 'int main() { return 0; }' > /tmp/test.c
-          emcc /tmp/test.c -o /tmp/test.js
-
-          # Find sysroot path
-          SYSROOT="${EMSDK}/upstream/emscripten/cache/sysroot"
-          echo "SYSROOT: $SYSROOT"
-          ls -la "$SYSROOT/include/" | head -10
-
-          # Export for subsequent steps
-          echo "EMSDK_SYSROOT=$SYSROOT" >> $GITHUB_ENV
+      - name: Install labelle CLI
+        run: curl -fsSL https://labelle.games/install.sh | bash
 
       - name: Build WASM
-        working-directory: .labelle/raylib_wasm
-        env:
-          C_INCLUDE_PATH: ${{ env.EMSDK_SYSROOT }}/include
         run: |
-          echo "C_INCLUDE_PATH: $C_INCLUDE_PATH"
-          ls -la "$C_INCLUDE_PATH" | head -5
-
-          # Build WASM target
-          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast
-
-          # List output
-          echo "=== Build output ==="
-          ls -la zig-out/web/
+          labelle build --target raylib_wasm --release --engine-path="${GITHUB_WORKSPACE}/../labelle-engine"
+          ls -la .labelle/raylib_wasm/zig-out/web/
 
       - name: Prepare deployment
         run: |
