@@ -60,9 +60,17 @@ jobs:
           ls -la .labelle/
           ls -la .labelle/raylib_wasm/
 
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.51
+
       - name: Build WASM
         working-directory: .labelle/raylib_wasm
         run: |
+          # Verify emsdk is available
+          emcc --version
+
           # Build WASM target (build.zig and build.zig.zon are in this directory)
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast
 
