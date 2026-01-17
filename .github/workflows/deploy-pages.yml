@@ -60,21 +60,24 @@ jobs:
           ls -la .labelle/
           ls -la .labelle/raylib_wasm/
 
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.51
+
+      - name: Populate emsdk sysroot
+        run: |
+          # Run emcc to ensure sysroot is populated
+          emcc --version
+          # Find and set sysroot path for C_INCLUDE_PATH
+          SYSROOT=$(dirname $(which emcc))/../cache/sysroot
+          echo "SYSROOT: $SYSROOT"
+          ls -la "$SYSROOT/include/" | head -10 || echo "Sysroot include not found"
+
       - name: Build WASM
         working-directory: .labelle/raylib_wasm
         run: |
-          # Fetch dependencies first to populate emsdk sysroot
-          zig build -Dtarget=wasm32-emscripten --fetch-only || true
-
-          # Find the emsdk path in zig cache and run emcc to populate sysroot
-          EMSDK_PATH=$(find "$HOME/.cache/zig" -path "*/p/*/upstream/emscripten" -type d 2>/dev/null | head -1 || find ".zig-cache" -path "*/p/*/upstream/emscripten" -type d 2>/dev/null | head -1)
-          if [ -n "$EMSDK_PATH" ]; then
-            echo "Found emsdk at: $EMSDK_PATH"
-            source "$(dirname "$EMSDK_PATH")/emsdk_env.sh"
-            emcc --version
-          fi
-
-          # Now build
+          # Build WASM target
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast
 
           # List output
