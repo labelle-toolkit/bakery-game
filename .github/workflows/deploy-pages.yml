@@ -44,21 +44,21 @@ jobs:
         with:
           version: 0.15.2
 
+      - name: Build generator
+        working-directory: ../labelle-engine
+        run: zig build
+
       - name: Generate build files
         run: |
-          # Use absolute paths to avoid working directory issues
+          # Run generator from the bakery-game directory
           ENGINE_PATH="${GITHUB_WORKSPACE}/../labelle-engine"
-          PROJECT_PATH="${GITHUB_WORKSPACE}/project.labelle"
 
-          echo "Engine path: $ENGINE_PATH"
-          echo "Project path: $PROJECT_PATH"
-
-          cd "$ENGINE_PATH"
-          zig build generate -- --project="$PROJECT_PATH" --engine-path="$ENGINE_PATH"
+          # Run the generator binary directly (not through zig build)
+          "${ENGINE_PATH}/zig-out/bin/labelle-generate" --engine-path="${ENGINE_PATH}"
 
           echo "=== Generated files ==="
-          ls -la "${GITHUB_WORKSPACE}/.labelle/"
-          ls -la "${GITHUB_WORKSPACE}/.labelle/raylib_wasm/"
+          ls -la .labelle/
+          ls -la .labelle/raylib_wasm/
 
       - name: Build WASM
         working-directory: .labelle/raylib_wasm
