@@ -49,7 +49,9 @@ jobs:
           version: 3.1.51
 
       - name: Install labelle CLI
-        run: curl -fsSL https://labelle.games/install.sh | bash
+        run: |
+          curl -fsSL https://labelle.games/install.sh | bash
+          echo "$HOME/.labelle/bin" >> $GITHUB_PATH
 
       - name: Build WASM
         run: |
