@@ -67,16 +67,26 @@ jobs:
 
       - name: Populate emsdk sysroot
         run: |
-          # Run emcc to ensure sysroot is populated
-          emcc --version
-          # Find and set sysroot path for C_INCLUDE_PATH
-          SYSROOT=$(dirname $(which emcc))/../cache/sysroot
+          # Compile a minimal C file to force sysroot population
+          echo 'int main() { return 0; }' > /tmp/test.c
+          emcc /tmp/test.c -o /tmp/test.js
+
+          # Find sysroot path
+          SYSROOT="${EMSDK}/upstream/emscripten/cache/sysroot"
           echo "SYSROOT: $SYSROOT"
-          ls -la "$SYSROOT/include/" | head -10 || echo "Sysroot include not found"
+          ls -la "$SYSROOT/include/" | head -10
+
+          # Export for subsequent steps
+          echo "EMSDK_SYSROOT=$SYSROOT" >> $GITHUB_ENV
 
       - name: Build WASM
         working-directory: .labelle/raylib_wasm
+        env:
+          C_INCLUDE_PATH: ${{ env.EMSDK_SYSROOT }}/include
         run: |
+          echo "C_INCLUDE_PATH: $C_INCLUDE_PATH"
+          ls -la "$C_INCLUDE_PATH" | head -5
+
           # Build WASM target
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseFast
 
