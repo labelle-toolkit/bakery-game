@@ -143,8 +143,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                     const storage_pos = storage_view.get(Position, storage_entity);
                                     const storage_id = engine.entityToU64(storage_entity);
 
-                                    // Remove DanglingItem component - item is now being carried
-                                    registry.remove(DanglingItem, item_entity);
+                                    // NOTE: Don't remove DanglingItem component here - the task engine's
+                                    // storeCompleted handler needs it in dangling_items map.
+                                    // The component will be removed when the delivery completes.
 
                                     // Attach item to worker (parent/child relationship)
                                     game.setParent(item_entity, entity) catch |err| {
@@ -213,10 +214,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                 // This is the target EIS
                                 game.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
 
-                                // Notify engine that item was added to storage
-                                // (registry/game pointers are automatically set via ensureContext)
                                 const storage_id = engine.entityToU64(storage_entity);
-                                _ = Context.itemAdded(storage_id, storage.accepts.?);
 
                                 std.log.info("[WorkerMovement] Worker {d} delivered item {d} to EIS {d}", .{
                                     worker_id,
@@ -227,9 +225,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                 // Clean up tracking
                                 _ = task_hooks.worker_carried_items.remove(worker_id);
 
-                                // Don't call workerIdle() here - if the task engine wants to assign
-                                // a new task, the hook (pickup_started) will have set a new MovementTarget.
-                                // The MovementTarget cleanup logic below will detect this and keep it.
+                                // Notify engine that dangling item delivery is complete
+                                // This will: clear dangling_task, update EIS state, emit item_delivered hook
+                                _ = Context.storeCompleted(worker_id);
                                 break;
                             }
                         }
@@ -240,6 +238,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 },
                 .pickup, .transport_pickup => {
                     // Worker arrived to pick up item from storage (task engine managed)
+                    // Remove MovementTarget before calling pickupCompleted since hooks may set a new one
+                    registry.remove(MovementTarget, entity);
                     _ = Context.pickupCompleted(worker_id);
                 },
                 .arrive_at_workstation => {
@@ -248,24 +248,38 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 },
             }
 
+            // Skip target comparison for pickup actions - they already called pickupCompleted above
+            // and any subsequent hook (like process_started) may not set a new target
+            const skip_target_check = (old_action == .pickup or old_action == .transport_pickup);
+
             // Only remove MovementTarget if no new target was set by hooks
             var target_was_removed = false;
-            if (registry.tryGet(MovementTarget, entity)) |new_target| {
-                std.log.info("[WorkerMovement] After action, checking target: old=({d},{d}) new=({d},{d})", .{
-                    old_target_x,
-                    old_target_y,
-                    new_target.target_x,
-                    new_target.target_y,
-                });
-                if (new_target.target_x == old_target_x and new_target.target_y == old_target_y) {
-                    // Same target position - task complete, remove component
-                    std.log.info("[WorkerMovement] Removing MovementTarget (same position)", .{});
-                    registry.remove(MovementTarget, entity);
-                    target_was_removed = true;
-                } else {
-                    std.log.info("[WorkerMovement] Keeping MovementTarget (new position set by hook)", .{});
+            if (!skip_target_check) {
+                if (registry.tryGet(MovementTarget, entity)) |new_target| {
+                    std.log.info("[WorkerMovement] After action, checking target: old=({d},{d}) new=({d},{d})", .{
+                        old_target_x,
+                        old_target_y,
+                        new_target.target_x,
+                        new_target.target_y,
+                    });
+                    if (new_target.target_x == old_target_x and new_target.target_y == old_target_y) {
+                        // Same target position - check if this is a pickup action
+                        // If worker is already at pickup location, immediately complete the pickup
+                        if (new_target.action == .pickup or new_target.action == .transport_pickup) {
+                            std.log.info("[WorkerMovement] Worker already at pickup location, completing pickup immediately", .{});
+                            registry.remove(MovementTarget, entity);
+                            _ = Context.pickupCompleted(worker_id);
+                        } else {
+                            // Not a pickup - task complete, remove component
+                            std.log.info("[WorkerMovement] Removing MovementTarget (same position)", .{});
+                            registry.remove(MovementTarget, entity);
+                            target_was_removed = true;
+                        }
+                    } else {
+                        std.log.info("[WorkerMovement] Keeping MovementTarget (new position set by hook)", .{});
+                    }
+                    // else: new target was set by hook, keep it
                 }
-                // else: new target was set by hook, keep it
             }
 
             // If we removed the MovementTarget and it's a Worker with no new task,

@@ -263,6 +263,12 @@ pub const GameHooks = struct {
 
         const item_entity = engine.entityFromU64(payload.item_id);
 
+        // Remove DanglingItem component now that delivery is complete
+        const DanglingItem = BoundTypes.DanglingItem;
+        if (registry.tryGet(DanglingItem, item_entity) != null) {
+            registry.remove(DanglingItem, item_entity);
+        }
+
         // Detach item from worker (was attached during transport)
         game.removeParent(item_entity);
 
