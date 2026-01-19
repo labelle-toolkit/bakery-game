@@ -9,11 +9,12 @@
             .process_duration = 5,
             // Nested storages - each Storage has its own role and will auto-attach
             // to this workstation via parent reference (RFC #169)
+            // Nested storage positions are RELATIVE to parent (oven at 600, 150)
             .storages = .{
-                // EIS - Empty Flour storage (accepts dangling flour items)
+                // EIS - Empty Flour storage (accepts dangling flour items) - left of oven
                 .{
                     .components = .{
-                        .Position = .{ .x = 100, .y = 300 },
+                        .Position = .{ .x = -60, .y = 80 },
                         .Shape = .{
                             .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
                             .color = .{ .r = 100, .g = 150, .b = 100, .a = 255 },
@@ -24,10 +25,10 @@
                         },
                     },
                 },
-                // EIS - Empty Water storage (accepts dangling water items)
+                // EIS - Empty Water storage (accepts dangling water items) - right of flour
                 .{
                     .components = .{
-                        .Position = .{ .x = 100, .y = 360 },
+                        .Position = .{ .x = 20, .y = 80 },
                         .Shape = .{
                             .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
                             .color = .{ .r = 100, .g = 100, .b = 180, .a = 255 },
@@ -38,10 +39,10 @@
                         },
                     },
                 },
-                // IIS - Internal Flour slot (recipe input)
+                // IIS - Internal Flour slot (recipe input) - inside oven left
                 .{
                     .components = .{
-                        .Position = .{ .x = 560, .y = 150 },
+                        .Position = .{ .x = -50, .y = 0 },
                         .Shape = .{
                             .shape = .{ .rectangle = .{ .width = 30, .height = 30 } },
                             .color = .{ .r = 150, .g = 200, .b = 150, .a = 255 },
@@ -52,10 +53,10 @@
                         },
                     },
                 },
-                // IIS - Internal Water slot (recipe input)
+                // IIS - Internal Water slot (recipe input) - inside oven left-bottom
                 .{
                     .components = .{
-                        .Position = .{ .x = 560, .y = 185 },
+                        .Position = .{ .x = -50, .y = 35 },
                         .Shape = .{
                             .shape = .{ .rectangle = .{ .width = 30, .height = 30 } },
                             .color = .{ .r = 150, .g = 150, .b = 220, .a = 255 },
@@ -66,10 +67,10 @@
                         },
                     },
                 },
-                // IOS - Internal Output slot (produced Bread)
+                // IOS - Internal Output slot (produced Bread) - inside oven right
                 .{
                     .components = .{
-                        .Position = .{ .x = 690, .y = 165 },
+                        .Position = .{ .x = 50, .y = 15 },
                         .Shape = .{
                             .shape = .{ .rectangle = .{ .width = 30, .height = 30 } },
                             .color = .{ .r = 220, .g = 180, .b = 100, .a = 255 },
@@ -80,10 +81,10 @@
                         },
                     },
                 },
-                // EOS - External Output storage (final Bread storage)
+                // EOS - External Output storage (final Bread storage) - right of oven
                 .{
                     .components = .{
-                        .Position = .{ .x = 750, .y = 165 },
+                        .Position = .{ .x = 100, .y = 15 },
                         .Shape = .{
                             .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
                             .color = .{ .r = 180, .g = 140, .b = 80, .a = 255 },

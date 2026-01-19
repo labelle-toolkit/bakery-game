@@ -210,23 +210,33 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                             const dy_check = storage_pos.y - pos.y;
                             const dist_check = @sqrt(dx_check * dx_check + dy_check * dy_check);
 
-                            if (dist_check < 10.0 and storage.role == .eis and storage.accepts != null) {
-                                // This is the target EIS
+                            // Match EIS (dangling item delivery) or IIS (task-managed transfer)
+                            const is_target_storage = dist_check < 10.0 and
+                                (storage.role == .eis or storage.role == .iis) and
+                                storage.accepts != null;
+
+                            if (is_target_storage) {
+                                // Place item at storage position
                                 game.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
 
                                 const storage_id = engine.entityToU64(storage_entity);
 
-                                std.log.info("[WorkerMovement] Worker {d} delivered item {d} to EIS {d}", .{
+                                std.log.info("[WorkerMovement] Worker {d} delivered item {d} to {s} {d}", .{
                                     worker_id,
                                     item_id,
+                                    @tagName(storage.role),
                                     storage_id,
                                 });
 
-                                // Clean up tracking
+                                // Clean up worker→item tracking
                                 _ = task_hooks.worker_carried_items.remove(worker_id);
 
-                                // Notify engine that dangling item delivery is complete
-                                // This will: clear dangling_task, update EIS state, emit item_delivered hook
+                                // For IIS stores, track item at storage for consumption during processing
+                                if (storage.role == .iis) {
+                                    task_hooks.storage_items.put(storage_id, item_id) catch {};
+                                }
+
+                                // Notify engine that store is complete
                                 _ = Context.storeCompleted(worker_id);
                                 break;
                             }
@@ -238,6 +248,37 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 },
                 .pickup, .transport_pickup => {
                     // Worker arrived to pick up item from storage (task engine managed)
+                    // Visually attach the item at this storage to the worker
+                    task_hooks.ensureWorkerItemsInit();
+                    if (task_hooks.worker_pickup_storage.get(worker_id)) |storage_id| {
+                        if (task_hooks.storage_items.get(storage_id)) |item_id| {
+                            const item_entity = engine.entityFromU64(item_id);
+
+                            // Attach item to worker (parent/child relationship)
+                            game.setParent(item_entity, entity) catch |err| {
+                                std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
+                            };
+                            game.setLocalPositionXY(item_entity, 0, 10);
+
+                            // Track that worker is carrying this item
+                            task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
+
+                            // Remove item from storage tracking
+                            _ = task_hooks.storage_items.remove(storage_id);
+
+                            std.log.info("[WorkerMovement] pickup: attached item {d} from storage {d} to worker {d}", .{
+                                item_id, storage_id, worker_id,
+                            });
+                        } else {
+                            std.log.warn("[WorkerMovement] pickup: no item found at storage {d}", .{storage_id});
+                        }
+
+                        // Clean up pickup tracking
+                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
+                    } else {
+                        std.log.warn("[WorkerMovement] pickup: no pickup storage tracked for worker {d}", .{worker_id});
+                    }
+
                     // Remove MovementTarget before calling pickupCompleted since hooks may set a new one
                     registry.remove(MovementTarget, entity);
                     _ = Context.pickupCompleted(worker_id);

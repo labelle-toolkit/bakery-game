@@ -29,6 +29,10 @@ const Context = main.labelle_tasksContext;
 pub var worker_carried_items: std.AutoHashMap(u64, u64) = undefined;
 /// Track which EIS each dangling item should be delivered to (item_id -> eis_id)
 pub var dangling_item_targets: std.AutoHashMap(u64, u64) = undefined;
+/// Track which item entity is at each storage (storage_id -> item_id)
+pub var storage_items: std.AutoHashMap(u64, u64) = undefined;
+/// Track which storage the worker is currently picking from (worker_id -> storage_id)
+pub var worker_pickup_storage: std.AutoHashMap(u64, u64) = undefined;
 var worker_items_initialized: bool = false;
 
 pub fn ensureWorkerItemsInit() void {
@@ -36,6 +40,8 @@ pub fn ensureWorkerItemsInit() void {
         // Use c_allocator for WASM compatibility (page_allocator doesn't work in WASM)
         worker_carried_items = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         dangling_item_targets = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
+        storage_items = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
+        worker_pickup_storage = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         worker_items_initialized = true;
     }
 }
@@ -106,6 +112,11 @@ pub const GameHooks = struct {
             storage_pos.x,
             storage_pos.y,
         });
+
+        // Track which storage the worker is picking from (for visual item pickup)
+        ensureWorkerItemsInit();
+        worker_pickup_storage.put(payload.worker_id, payload.storage_id) catch {};
+        log.info("pickup_started: tracking worker {d} picking from storage {d}", .{ payload.worker_id, payload.storage_id });
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
@@ -251,6 +262,9 @@ pub const GameHooks = struct {
     var delivery_counter: u32 = 0;
 
     pub fn item_delivered(payload: anytype) void {
+        log.warn("item_delivered: ENTERED worker={d} storage={d} item={d}", .{
+            payload.worker_id, payload.storage_id, payload.item_id,
+        });
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
         const game_ptr = payload.game orelse return;
@@ -276,6 +290,14 @@ pub const GameHooks = struct {
         ensureWorkerItemsInit();
         _ = worker_carried_items.remove(payload.worker_id);
 
+        // Track which item is at this storage (for later pickup by worker)
+        std.debug.print("[DEBUG] item_delivered: about to put item {d} at storage {d}\n", .{ payload.item_id, payload.storage_id });
+        storage_items.put(payload.storage_id, payload.item_id) catch |err| {
+            std.debug.print("[DEBUG] item_delivered: storage_items.put failed: {}\n", .{err});
+        };
+        std.debug.print("[DEBUG] item_delivered: tracking item {d} at storage {d}\n", .{ payload.item_id, payload.storage_id });
+        log.info("item_delivered: tracking item {d} at storage {d}", .{ payload.item_id, payload.storage_id });
+
         game.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
 
         const storage_z: u8 = if (registry.tryGet(Shape, storage_entity)) |s| @intCast(@min(@max(s.z_index, 0), 254)) else 128;
@@ -291,15 +313,34 @@ pub const GameHooks = struct {
 
     /// Handle worker starting to process at a workstation.
     /// Sets up WorkProgress component to track work time.
+    /// Also hides/consumes items at IIS (Internal Input Storage).
     pub fn process_started(payload: anytype) void {
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+        const game_ptr = payload.game orelse return;
+        const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
 
         const ws_entity = engine.entityFromU64(payload.workstation_id);
         const workstation = registry.tryGet(Workstation, ws_entity) orelse {
             log.err("process_started: workstation {d} has no Workstation component", .{payload.workstation_id});
             return;
         };
+
+        // Hide items at IIS storages (they're being consumed in the process)
+        ensureWorkerItemsInit();
+        for (workstation.storages) |storage_entity| {
+            const storage = registry.tryGet(Storage, storage_entity) orelse continue;
+            if (storage.role == .iis) {
+                const iis_id = engine.entityToU64(storage_entity);
+                if (storage_items.get(iis_id)) |item_id| {
+                    const item_entity = engine.entityFromU64(item_id);
+                    // Hide the item (destroy it - it's being consumed)
+                    game.destroyEntity(item_entity);
+                    _ = storage_items.remove(iis_id);
+                    log.info("process_started: consumed item {d} from IIS {d}", .{ item_id, iis_id });
+                }
+            }
+        }
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, WorkProgress{
