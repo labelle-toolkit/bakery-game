@@ -243,8 +243,12 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                     }
                                     // Track item at EIS storage for later consumption
                                     task_hooks.storage_items.put(storage_id, item_id) catch {};
-                                    // Mark worker as available for next task
-                                    _ = Context.workerAvailable(worker_id);
+                                    // Check for remaining dangling items BEFORE notifying task engine
+                                    // This ensures all dangling items are picked up before workstation tasks start
+                                    if (!tryAssignDanglingItem(registry, entity, worker_id)) {
+                                        // No more dangling items - mark worker as available for task engine
+                                        _ = Context.workerAvailable(worker_id);
+                                    }
                                 } else if (storage.role == .iis) {
                                     task_hooks.storage_items.put(storage_id, item_id) catch {};
                                     _ = Context.storeCompleted(worker_id);
