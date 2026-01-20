@@ -16,14 +16,16 @@
                     .components = .{
                         .Position = .{ .x = -60, .y = 80 },
                         .Shape = .{
-                            .shape = .{ .rectangle = .{ .width = 40, .height = 40, .fill = .outline } },
+                            .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
                             .color = .{ .r = 100, .g = 150, .b = 100, .a = 255 },
                         },
                         .Storage = .{
                             .role = .eis,
                             .accepts = .Flour,
                         },
-                        .Text = .{ .text = "EIS", .size = 10, .color = .{ .r = 100, .g = 200, .b = 100, .a = 255 } },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "EIS-F", .size = 12, .y = 30, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
                     },
                 },
                 // EIS - Empty Water storage (accepts dangling water items) - right of flour
@@ -31,14 +33,16 @@
                     .components = .{
                         .Position = .{ .x = 20, .y = 80 },
                         .Shape = .{
-                            .shape = .{ .rectangle = .{ .width = 40, .height = 40, .fill = .outline } },
+                            .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
                             .color = .{ .r = 100, .g = 100, .b = 180, .a = 255 },
                         },
                         .Storage = .{
                             .role = .eis,
                             .accepts = .Water,
                         },
-                        .Text = .{ .text = "EIS", .size = 10, .color = .{ .r = 100, .g = 200, .b = 100, .a = 255 } },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "EIS-W", .size = 12, .y = 30, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
                     },
                 },
                 // IIS - Internal Flour slot (recipe input) - inside oven left
@@ -46,14 +50,16 @@
                     .components = .{
                         .Position = .{ .x = -50, .y = 0 },
                         .Shape = .{
-                            .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
+                            .shape = .{ .rectangle = .{ .width = 30, .height = 30 } },
                             .color = .{ .r = 150, .g = 200, .b = 150, .a = 255 },
                         },
                         .Storage = .{
                             .role = .iis,
                             .accepts = .Flour,
                         },
-                        .Text = .{ .text = "IIS", .size = 10, .color = .{ .r = 150, .g = 220, .b = 150, .a = 255 } },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "IIS-F", .size = 12, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
                     },
                 },
                 // IIS - Internal Water slot (recipe input) - inside oven left-bottom
@@ -61,14 +67,16 @@
                     .components = .{
                         .Position = .{ .x = -50, .y = 35 },
                         .Shape = .{
-                            .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
+                            .shape = .{ .rectangle = .{ .width = 30, .height = 30 } },
                             .color = .{ .r = 150, .g = 150, .b = 220, .a = 255 },
                         },
                         .Storage = .{
                             .role = .iis,
                             .accepts = .Water,
                         },
-                        .Text = .{ .text = "IIS", .size = 10, .color = .{ .r = 150, .g = 220, .b = 150, .a = 255 } },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "IIS-W", .size = 12, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
                     },
                 },
                 // IOS - Internal Output slot (produced Bread) - inside oven right
@@ -76,14 +84,16 @@
                     .components = .{
                         .Position = .{ .x = 50, .y = 15 },
                         .Shape = .{
-                            .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
+                            .shape = .{ .rectangle = .{ .width = 30, .height = 30 } },
                             .color = .{ .r = 220, .g = 180, .b = 100, .a = 255 },
                         },
                         .Storage = .{
                             .role = .ios,
                             .accepts = .Bread,
                         },
-                        .Text = .{ .text = "IOS", .size = 10, .color = .{ .r = 220, .g = 180, .b = 100, .a = 255 } },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "IOS", .size = 12, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
                     },
                 },
                 // EOS - External Output storage (final Bread storage) - right of oven
@@ -91,14 +101,16 @@
                     .components = .{
                         .Position = .{ .x = 100, .y = 15 },
                         .Shape = .{
-                            .shape = .{ .rectangle = .{ .width = 40, .height = 40, .fill = .outline } },
+                            .shape = .{ .rectangle = .{ .width = 40, .height = 40 } },
                             .color = .{ .r = 180, .g = 140, .b = 80, .a = 255 },
                         },
                         .Storage = .{
                             .role = .eos,
                             .accepts = .Bread,
                         },
-                        .Text = .{ .text = "EOS", .size = 10, .color = .{ .r = 200, .g = 140, .b = 80, .a = 255 } },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "EOS", .size = 12, .y = 30, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
                     },
                 },
             },
