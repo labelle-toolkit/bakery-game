@@ -23,6 +23,7 @@ const water_well_prefab = @import("prefabs/water_well.zon");
 const water_prefab = @import("prefabs/water.zon");
 const baker_prefab = @import("prefabs/baker.zon");
 const flour_prefab = @import("prefabs/flour.zon");
+const bread_prefab = @import("prefabs/bread.zon");
 
 const movement_target_comp = @import("components/movement_target.zig");
 const work_progress_comp = @import("components/work_progress.zig");
@@ -46,6 +47,7 @@ pub const Prefabs = engine.PrefabRegistry(.{
     .water = water_prefab,
     .baker = baker_prefab,
     .flour = flour_prefab,
+    .bread = bread_prefab,
 });
 
 pub const Components = engine.ComponentRegistry(struct {
@@ -80,6 +82,17 @@ const Game = engine.GameWith(Hooks);
 
 pub const Loader = engine.SceneLoader(Prefabs, Components, Scripts);
 pub const initial_scene = @import("scenes/main.zon");
+
+/// Instantiate bread prefab at the given position. Returns the entity.
+pub fn instantiateBread(x: f32, y: f32) ?engine.Entity {
+    const scene = global_scene orelse return null;
+    const game = global_game orelse return null;
+    const ctx = engine.SceneContext.init(game);
+    return Loader.instantiatePrefab("bread", scene, ctx, x, y) catch |err| {
+        std.log.err("Failed to instantiate bread prefab: {}", .{err});
+        return null;
+    };
+}
 
 // Get the scene type from Loader.load's return type using compile-time introspection
 const SceneType = blk: {
