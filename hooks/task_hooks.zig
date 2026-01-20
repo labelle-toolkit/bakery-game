@@ -74,8 +74,10 @@ pub const GameHooks = struct {
 
     /// Handle worker being released from a workstation.
     pub fn worker_released(payload: anytype) void {
-        log.info("worker_released: worker={d} workstation={d}", .{ payload.worker_id, payload.workstation_id });
         ensureWorkerItemsInit();
+        // Note: worker_released payload only has worker_id, not workstation_id
+        const ws_id = worker_workstation.get(payload.worker_id) orelse 0;
+        log.info("worker_released: worker={d} workstation={d}", .{ payload.worker_id, ws_id });
         _ = worker_workstation.remove(payload.worker_id);
     }
 
