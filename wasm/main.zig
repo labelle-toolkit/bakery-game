@@ -16,7 +16,7 @@ const labelle_tasks = @import("labelle-tasks");
 const items_enum = @import("enums/items.zig");
 pub const Items = items_enum.Items;
 pub const GameId = u64;
-pub const labelle_tasksBindItems = labelle_tasks.bind(Items);
+pub const labelle_tasksBindItems = labelle_tasks.bind(Items, engine.Entity);
 
 const oven_prefab = @import("prefabs/oven.zon");
 const water_well_prefab = @import("prefabs/water_well.zon");
