@@ -24,14 +24,26 @@ const Workstation = BoundTypes.Workstation;
 
 /// Try to assign the given worker to pick up a remaining dangling item
 fn tryAssignDanglingItem(registry: anytype, worker_entity: anytype, worker_id: u64) bool {
+    std.log.info("[WorkerMovement] tryAssignDanglingItem: looking for remaining dangling items for worker {d}", .{worker_id});
+
     // Query for dangling items that still exist
     var dangling_view = registry.view(.{ DanglingItem, Position });
     var dangling_iter = dangling_view.entityIterator();
+
+    var dangling_count: u32 = 0;
 
     while (dangling_iter.next()) |dangling_entity| {
         const dangling_item = dangling_view.get(DanglingItem, dangling_entity);
         const dangling_pos = dangling_view.get(Position, dangling_entity);
         const dangling_id = engine.entityToU64(dangling_entity);
+        dangling_count += 1;
+
+        std.log.info("[WorkerMovement] tryAssignDanglingItem: found dangling item {d} ({s}) at ({d},{d})", .{
+            dangling_id,
+            @tagName(dangling_item.item_type),
+            dangling_pos.x,
+            dangling_pos.y,
+        });
 
         // Find matching EIS that accepts this item type
         var storage_view = registry.view(.{ Storage, Position });
@@ -41,9 +53,9 @@ fn tryAssignDanglingItem(registry: anytype, worker_entity: anytype, worker_id: u
             const storage = storage_view.get(Storage, storage_entity);
 
             // Only assign to EIS storages that accept this item type
-            if (storage.role != .eis or storage.accepts != dangling_item.item_type) {
-                continue;
-            }
+            if (storage.role != .eis) continue;
+            const accepts = storage.accepts orelse continue;
+            if (accepts != dangling_item.item_type) continue;
 
             const storage_id = engine.entityToU64(storage_entity);
 
@@ -69,6 +81,7 @@ fn tryAssignDanglingItem(registry: anytype, worker_entity: anytype, worker_id: u
             return true;
         }
     }
+    std.log.info("[WorkerMovement] tryAssignDanglingItem: no remaining dangling items found (checked {d} items)", .{dangling_count});
     return false;
 }
 
