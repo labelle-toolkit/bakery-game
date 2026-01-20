@@ -11,6 +11,8 @@ pub const Action = enum {
     pickup_dangling,
     arrive_at_workstation, // Worker arriving at assigned workstation
     transport_pickup, // Worker picking up item from EOS for transport to EIS
+    deliver_to_iis, // Worker delivering item from EIS to IIS
+    pickup_from_ios, // Worker picking up output item from IOS
 };
 
 /// Component that directs a worker to move towards a target position

@@ -22,7 +22,6 @@ pub fn init(game: *Game, scene: *Scene) void {
 
 pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     _ = scene;
-    _ = dt;
 
     const registry = game.getRegistry();
 
@@ -34,9 +33,20 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         const progress = view.get(worker_entity);
         const worker_id = engine.entityToU64(worker_entity);
 
-        // Create updated progress with incremented counter
+        // Create updated progress with accumulated time
         var updated_progress = progress.*;
-        updated_progress.tick();
+        updated_progress.update(dt);
+
+        // Log progress every second (approximately)
+        const prev_seconds: u32 = @intFromFloat(progress.accumulated);
+        const curr_seconds: u32 = @intFromFloat(updated_progress.accumulated);
+        if (curr_seconds > prev_seconds) {
+            log.info("Work progress: worker={d} {d:.1}s / {d:.1}s", .{
+                worker_id,
+                updated_progress.accumulated,
+                updated_progress.duration,
+            });
+        }
 
         // Update the component
         registry.set(worker_entity, updated_progress);

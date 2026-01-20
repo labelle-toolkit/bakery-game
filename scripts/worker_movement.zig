@@ -20,6 +20,7 @@ const BoundTypes = main.labelle_tasksBindItems;
 const Storage = BoundTypes.Storage;
 const DanglingItem = BoundTypes.DanglingItem;
 const Worker = BoundTypes.Worker;
+const Workstation = BoundTypes.Workstation;
 
 /// Try to assign the given worker to pick up a remaining dangling item
 fn tryAssignDanglingItem(registry: anytype, worker_entity: anytype, worker_id: u64) bool {
@@ -210,9 +211,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                             const dy_check = storage_pos.y - pos.y;
                             const dist_check = @sqrt(dx_check * dx_check + dy_check * dy_check);
 
-                            // Match EIS (dangling item delivery) or IIS (task-managed transfer)
+                            // Match EIS (dangling item delivery), IIS (task-managed transfer), or EOS (output storage)
                             const is_target_storage = dist_check < 10.0 and
-                                (storage.role == .eis or storage.role == .iis) and
+                                (storage.role == .eis or storage.role == .iis or storage.role == .eos) and
                                 storage.accepts != null;
 
                             if (is_target_storage) {
@@ -231,13 +232,35 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                 // Clean up worker→item tracking
                                 _ = task_hooks.worker_carried_items.remove(worker_id);
 
-                                // For IIS stores, track item at storage for consumption during processing
-                                if (storage.role == .iis) {
+                                // Handle based on storage role
+                                if (storage.role == .eis) {
+                                    // Dangling item delivered to EIS - get item type and notify
+                                    if (registry.tryGet(DanglingItem, item_entity)) |dangling| {
+                                        _ = Context.itemAdded(storage_id, dangling.item_type);
+                                        // Remove DanglingItem component - item is now "stored"
+                                        registry.remove(DanglingItem, item_entity);
+                                        std.log.info("[WorkerMovement] Removed DanglingItem component from item {d} (now stored in EIS)", .{item_id});
+                                    }
+                                    // Track item at EIS storage for later consumption
                                     task_hooks.storage_items.put(storage_id, item_id) catch {};
+                                    // Mark worker as available for next task
+                                    _ = Context.workerAvailable(worker_id);
+                                } else if (storage.role == .iis) {
+                                    task_hooks.storage_items.put(storage_id, item_id) catch {};
+                                    _ = Context.storeCompleted(worker_id);
+                                } else if (storage.role == .eos) {
+                                    // Output item (bread) delivered to EOS - remove DanglingItem and complete store
+                                    if (registry.tryGet(DanglingItem, item_entity)) |_| {
+                                        registry.remove(DanglingItem, item_entity);
+                                        std.log.info("[WorkerMovement] Removed DanglingItem component from item {d} (now stored in EOS)", .{item_id});
+                                    }
+                                    // Track item at EOS storage
+                                    task_hooks.storage_items.put(storage_id, item_id) catch {};
+                                    // Clean up store target tracking
+                                    _ = task_hooks.worker_store_target.remove(worker_id);
+                                    // Notify task engine that store is complete
+                                    _ = Context.storeCompleted(worker_id);
                                 }
-
-                                // Notify engine that store is complete
-                                _ = Context.storeCompleted(worker_id);
                                 break;
                             }
                         }
@@ -246,9 +269,157 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                         _ = Context.storeCompleted(worker_id);
                     }
                 },
-                .pickup, .transport_pickup => {
-                    // Worker arrived to pick up item from storage (task engine managed)
-                    // Visually attach the item at this storage to the worker
+                .pickup => {
+                    // Worker arrived at EIS to pick up item
+                    // After picking up, move to IIS before calling pickupCompleted
+                    task_hooks.ensureWorkerItemsInit();
+                    const eis_storage_id = task_hooks.worker_pickup_storage.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] pickup: no pickup storage tracked for worker {d}", .{worker_id});
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    // Get the item at EIS and attach to worker
+                    const item_id = task_hooks.storage_items.get(eis_storage_id) orelse {
+                        std.log.warn("[WorkerMovement] pickup: no item found at EIS {d}", .{eis_storage_id});
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    const item_entity = engine.entityFromU64(item_id);
+
+                    // Attach item to worker (parent/child relationship)
+                    game.setParent(item_entity, entity) catch |err| {
+                        std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
+                    };
+                    game.setLocalPositionXY(item_entity, 0, 10);
+
+                    // Track that worker is carrying this item
+                    task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
+
+                    // Remove item from EIS storage tracking
+                    _ = task_hooks.storage_items.remove(eis_storage_id);
+
+                    std.log.info("[WorkerMovement] pickup: attached item {d} from EIS {d} to worker {d}", .{
+                        item_id, eis_storage_id, worker_id,
+                    });
+
+                    // Get the EIS storage to find what item type it accepts
+                    const eis_entity = engine.entityFromU64(eis_storage_id);
+                    const eis_storage = registry.tryGet(Storage, eis_entity) orelse {
+                        std.log.warn("[WorkerMovement] pickup: EIS {d} has no Storage component", .{eis_storage_id});
+                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    // Find the workstation this worker is assigned to
+                    const ws_id = task_hooks.worker_workstation.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] pickup: worker {d} not assigned to any workstation", .{worker_id});
+                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    // Find the IIS that accepts the same item type
+                    const ws_entity = engine.entityFromU64(ws_id);
+                    const workstation = registry.tryGet(Workstation, ws_entity) orelse {
+                        std.log.warn("[WorkerMovement] pickup: workstation {d} has no Workstation component", .{ws_id});
+                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    // Find IIS that accepts the same item type as the EIS
+                    var found_iis = false;
+                    for (workstation.storages) |storage_entity_ref| {
+                        const storage = registry.tryGet(Storage, storage_entity_ref) orelse continue;
+                        if (storage.role == .iis and storage.accepts == eis_storage.accepts) {
+                            const iis_pos = registry.tryGet(Position, storage_entity_ref) orelse continue;
+                            const iis_id = engine.entityToU64(storage_entity_ref);
+
+                            // Track which IIS we're delivering to (reuse worker_pickup_storage)
+                            task_hooks.worker_pickup_storage.put(worker_id, iis_id) catch {};
+
+                            std.log.info("[WorkerMovement] pickup: worker {d} moving from EIS {d} to IIS {d} at ({d},{d})", .{
+                                worker_id, eis_storage_id, iis_id, iis_pos.x, iis_pos.y,
+                            });
+
+                            // Set new target to IIS
+                            registry.set(entity, MovementTarget{
+                                .target_x = iis_pos.x,
+                                .target_y = iis_pos.y,
+                                .action = .deliver_to_iis,
+                            });
+                            found_iis = true;
+                            break;
+                        }
+                    }
+
+                    if (!found_iis) {
+                        std.log.warn("[WorkerMovement] pickup: no IIS found for item type, completing pickup directly", .{});
+                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                    }
+                },
+                .deliver_to_iis => {
+                    // Worker arrived at IIS to deposit item
+                    task_hooks.ensureWorkerItemsInit();
+
+                    // Get the IIS we're delivering to
+                    const iis_id = task_hooks.worker_pickup_storage.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] deliver_to_iis: no IIS tracked for worker {d}", .{worker_id});
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    // Get the item the worker is carrying
+                    const item_id = task_hooks.worker_carried_items.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] deliver_to_iis: worker {d} not carrying any item", .{worker_id});
+                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    const item_entity = engine.entityFromU64(item_id);
+                    const iis_entity = engine.entityFromU64(iis_id);
+                    const iis_pos = registry.tryGet(Position, iis_entity) orelse {
+                        std.log.warn("[WorkerMovement] deliver_to_iis: IIS {d} has no Position", .{iis_id});
+                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.pickupCompleted(worker_id);
+                        break;
+                    };
+
+                    // Detach item from worker and place at IIS
+                    game.removeParent(item_entity);
+                    game.setWorldPositionXY(item_entity, iis_pos.x, iis_pos.y);
+
+                    // Track item at IIS storage
+                    task_hooks.storage_items.put(iis_id, item_id) catch {};
+
+                    std.log.info("[WorkerMovement] deliver_to_iis: worker {d} deposited item {d} at IIS {d}", .{
+                        worker_id, item_id, iis_id,
+                    });
+
+                    // Clean up tracking - worker no longer carrying item
+                    _ = task_hooks.worker_carried_items.remove(worker_id);
+                    _ = task_hooks.worker_pickup_storage.remove(worker_id);
+
+                    // Now call pickupCompleted - task engine will advance to Process step
+                    registry.remove(MovementTarget, entity);
+                    _ = Context.pickupCompleted(worker_id);
+                },
+                .transport_pickup => {
+                    // Worker arrived to pick up item from storage for transport
                     task_hooks.ensureWorkerItemsInit();
                     if (task_hooks.worker_pickup_storage.get(worker_id)) |storage_id| {
                         if (task_hooks.storage_items.get(storage_id)) |item_id| {
@@ -266,22 +437,110 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                             // Remove item from storage tracking
                             _ = task_hooks.storage_items.remove(storage_id);
 
-                            std.log.info("[WorkerMovement] pickup: attached item {d} from storage {d} to worker {d}", .{
+                            std.log.info("[WorkerMovement] transport_pickup: attached item {d} from storage {d} to worker {d}", .{
                                 item_id, storage_id, worker_id,
                             });
                         } else {
-                            std.log.warn("[WorkerMovement] pickup: no item found at storage {d}", .{storage_id});
+                            std.log.warn("[WorkerMovement] transport_pickup: no item found at storage {d}", .{storage_id});
                         }
 
                         // Clean up pickup tracking
                         _ = task_hooks.worker_pickup_storage.remove(worker_id);
                     } else {
-                        std.log.warn("[WorkerMovement] pickup: no pickup storage tracked for worker {d}", .{worker_id});
+                        std.log.warn("[WorkerMovement] transport_pickup: no pickup storage tracked for worker {d}", .{worker_id});
                     }
 
                     // Remove MovementTarget before calling pickupCompleted since hooks may set a new one
                     registry.remove(MovementTarget, entity);
                     _ = Context.pickupCompleted(worker_id);
+                },
+                .pickup_from_ios => {
+                    // Worker arrived at IOS to pick up the output item (bread)
+                    task_hooks.ensureWorkerItemsInit();
+
+                    // Find the IOS at this position and get the bread
+                    const ws_id = task_hooks.worker_workstation.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] pickup_from_ios: worker {d} not assigned to any workstation", .{worker_id});
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.storeCompleted(worker_id);
+                        break;
+                    };
+
+                    const ws_entity_ref = engine.entityFromU64(ws_id);
+                    const workstation = registry.tryGet(Workstation, ws_entity_ref) orelse {
+                        std.log.warn("[WorkerMovement] pickup_from_ios: workstation {d} has no Workstation component", .{ws_id});
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.storeCompleted(worker_id);
+                        break;
+                    };
+
+                    // Find IOS and its item
+                    var found_ios = false;
+                    for (workstation.storages) |storage_entity_ref| {
+                        const storage = registry.tryGet(Storage, storage_entity_ref) orelse continue;
+                        if (storage.role == .ios) {
+                            const ios_id = engine.entityToU64(storage_entity_ref);
+
+                            // Get the item (bread) at IOS
+                            const item_id = task_hooks.storage_items.get(ios_id) orelse {
+                                std.log.warn("[WorkerMovement] pickup_from_ios: no item at IOS {d}", .{ios_id});
+                                break;
+                            };
+
+                            const item_entity = engine.entityFromU64(item_id);
+
+                            // Attach bread to worker
+                            game.setParent(item_entity, entity) catch |err| {
+                                std.log.err("[WorkerMovement] pickup_from_ios: failed to attach item: {}", .{err});
+                            };
+                            game.setLocalPositionXY(item_entity, 0, 10);
+
+                            // Track that worker is carrying this item
+                            task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
+
+                            // Remove item from IOS tracking
+                            _ = task_hooks.storage_items.remove(ios_id);
+
+                            std.log.info("[WorkerMovement] pickup_from_ios: worker {d} picked up item {d} from IOS {d}", .{
+                                worker_id, item_id, ios_id,
+                            });
+
+                            // Get the target EOS and move there
+                            const eos_id = task_hooks.worker_store_target.get(worker_id) orelse {
+                                std.log.warn("[WorkerMovement] pickup_from_ios: no EOS target for worker {d}", .{worker_id});
+                                registry.remove(MovementTarget, entity);
+                                _ = Context.storeCompleted(worker_id);
+                                break;
+                            };
+
+                            const eos_entity = engine.entityFromU64(eos_id);
+                            const eos_pos = registry.tryGet(Position, eos_entity) orelse {
+                                std.log.warn("[WorkerMovement] pickup_from_ios: EOS {d} has no Position", .{eos_id});
+                                registry.remove(MovementTarget, entity);
+                                _ = Context.storeCompleted(worker_id);
+                                break;
+                            };
+
+                            std.log.info("[WorkerMovement] pickup_from_ios: worker {d} moving to EOS {d} at ({d},{d})", .{
+                                worker_id, eos_id, eos_pos.x, eos_pos.y,
+                            });
+
+                            // Set target to EOS
+                            registry.set(entity, MovementTarget{
+                                .target_x = eos_pos.x,
+                                .target_y = eos_pos.y,
+                                .action = .store,
+                            });
+                            found_ios = true;
+                            break;
+                        }
+                    }
+
+                    if (!found_ios) {
+                        std.log.warn("[WorkerMovement] pickup_from_ios: no IOS found in workstation", .{});
+                        registry.remove(MovementTarget, entity);
+                        _ = Context.storeCompleted(worker_id);
+                    }
                 },
                 .arrive_at_workstation => {
                     // Worker arrived at workstation to start work
@@ -289,9 +548,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 },
             }
 
-            // Skip target comparison for pickup actions - they already called pickupCompleted above
-            // and any subsequent hook (like process_started) may not set a new target
-            const skip_target_check = (old_action == .pickup or old_action == .transport_pickup);
+            // Skip target comparison for actions that call pickupCompleted and remove MovementTarget
+            // Note: .pickup now sets a new target to IIS, so it should NOT skip the check
+            const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .pickup_from_ios);
 
             // Only remove MovementTarget if no new target was set by hooks
             var target_was_removed = false;

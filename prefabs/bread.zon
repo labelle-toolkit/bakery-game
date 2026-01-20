@@ -1,0 +1,13 @@
+.{
+    .components = .{
+        .Shape = .{
+            .shape = .{ .rectangle = .{ .width = 25, .height = 25 } },
+            .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 },
+            .z_index = 20,
+        },
+    },
+    .gizmos = .{
+        .Text = .{ .text = "Bread", .size = 10, .y = -15, .color = .{ .r = 255, .g = 200, .b = 100, .a = 255 } },
+        .BoundingBox = .{ .color = .{ .r = 210, .g = 160, .b = 90, .a = 150 }, .padding = 2 },
+    },
+}
