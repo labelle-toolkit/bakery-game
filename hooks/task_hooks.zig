@@ -422,11 +422,18 @@ pub const GameHooks = struct {
                 const storage_id = engine.entityToU64(storage_entity);
                 const ios_pos = registry.tryGet(Position, storage_entity) orelse continue;
 
-                // Create the output item entity using the bread prefab
-                const item_entity = main.instantiateBread(ios_pos.x, ios_pos.y) orelse {
-                    log.err("process_completed: failed to instantiate bread prefab", .{});
-                    continue;
-                };
+                // Create the output item entity (bread)
+                // Use registry.add() to trigger onAdd callback which tracks entity with render pipeline
+                const game_ptr = payload.game orelse continue;
+                const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
+                const item_entity = game.createEntity();
+                game.setWorldPositionXY(item_entity, ios_pos.x, ios_pos.y);
+                registry.add(item_entity, Shape{
+                    .shape = .{ .rectangle = .{ .width = 25, .height = 25 } },
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 }, // Bread color (golden brown)
+                    .z_index = 20,
+                    .visible = true,
+                });
                 // Mark as dangling item so it can be picked up for store step
                 registry.add(item_entity, main.labelle_tasksBindItems.DanglingItem{
                     .item_type = output_item,
