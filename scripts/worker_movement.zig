@@ -147,52 +147,33 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                 dist_to_item,
                             });
 
-                            // Find matching EIS for this item type
-                            var storage_view = registry.view(.{ Storage, Position });
-                            var storage_iter = storage_view.entityIterator();
+                            // NOTE: Don't remove DanglingItem component here - the task engine's
+                            // storeCompleted handler needs it in dangling_items map.
+                            // The component will be removed when the delivery completes.
 
-                            while (storage_iter.next()) |storage_entity| {
-                                const storage = storage_view.get(Storage, storage_entity);
-                                if (storage.role == .eis and storage.accepts == dangling_item.item_type) {
-                                    const storage_pos = storage_view.get(Position, storage_entity);
-                                    const storage_id = engine.entityToU64(storage_entity);
+                            // Attach item to worker (parent/child relationship)
+                            game.setParent(item_entity, entity) catch |err| {
+                                std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
+                            };
+                            game.setLocalPositionXY(item_entity, 0, 10);
+                            std.log.info("[WorkerMovement] Attached item {d} to worker {d} (parent/child)", .{ item_id, worker_id });
 
-                                    // NOTE: Don't remove DanglingItem component here - the task engine's
-                                    // storeCompleted handler needs it in dangling_items map.
-                                    // The component will be removed when the delivery completes.
+                            // Track the item for delivery completion
+                            task_hooks.ensureWorkerItemsInit();
+                            task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
 
-                                    // Attach item to worker (parent/child relationship)
-                                    game.setParent(item_entity, entity) catch |err| {
-                                        std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
-                                    };
-                                    game.setLocalPositionXY(item_entity, 0, 10);
-                                    std.log.info("[WorkerMovement] Attached item {d} to worker {d} (parent/child)", .{ item_id, worker_id });
+                            std.log.info("[WorkerMovement] Worker {d} picked up item {d} ({s})", .{
+                                worker_id,
+                                item_id,
+                                @tagName(dangling_item.item_type),
+                            });
 
-                                    // Track the item for delivery completion
-                                    task_hooks.ensureWorkerItemsInit();
-                                    task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
+                            // Notify task engine - it will dispatch store_started hook
+                            // which sets MovementTarget to the EIS
+                            _ = Context.pickupCompleted(worker_id);
 
-                                    // Assign worker to deliver to this EIS
-                                    registry.set(entity, MovementTarget{
-                                        .target_x = storage_pos.x,
-                                        .target_y = storage_pos.y,
-                                        .action = .store,
-                                    });
-
-                                    std.log.info("[WorkerMovement] Worker {d} picked up item {d} ({s}), delivering to EIS {d} at ({d},{d})", .{
-                                        worker_id,
-                                        item_id,
-                                        @tagName(dangling_item.item_type),
-                                        storage_id,
-                                        storage_pos.x,
-                                        storage_pos.y,
-                                    });
-
-                                    item_found = true;
-                                    break;
-                                }
-                            }
-                            if (item_found) break;
+                            item_found = true;
+                            break;
                         }
                     }
 
@@ -247,21 +228,12 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
                                 // Handle based on storage role
                                 if (storage.role == .eis) {
-                                    // Dangling item delivered to EIS - get item type and notify
-                                    if (registry.tryGet(DanglingItem, item_entity)) |dangling| {
-                                        _ = Context.itemAdded(storage_id, dangling.item_type);
-                                        // Remove DanglingItem component - item is now "stored"
-                                        registry.remove(DanglingItem, item_entity);
-                                        std.log.info("[WorkerMovement] Removed DanglingItem component from item {d} (now stored in EIS)", .{item_id});
-                                    }
-                                    // Track item at EIS storage for later consumption
+                                    // Dangling item delivered to EIS - notify task engine
+                                    // Task engine will dispatch item_delivered, clear dangling_task,
+                                    // and re-evaluate workstations (which makes worker available)
                                     task_hooks.storage_items.put(storage_id, item_id) catch {};
-                                    // Check for remaining dangling items BEFORE notifying task engine
-                                    // This ensures all dangling items are picked up before workstation tasks start
-                                    if (!tryAssignDanglingItem(registry, entity, worker_id)) {
-                                        // No more dangling items - mark worker as available for task engine
-                                        _ = Context.workerAvailable(worker_id);
-                                    }
+                                    std.log.info("[WorkerMovement] Calling storeCompleted for dangling item delivery to EIS {d}", .{storage_id});
+                                    _ = Context.storeCompleted(worker_id);
                                 } else if (storage.role == .iis) {
                                     task_hooks.storage_items.put(storage_id, item_id) catch {};
                                     _ = Context.storeCompleted(worker_id);
@@ -570,7 +542,6 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .pickup_from_ios);
 
             // Only remove MovementTarget if no new target was set by hooks
-            var target_was_removed = false;
             if (!skip_target_check) {
                 if (registry.tryGet(MovementTarget, entity)) |new_target| {
                     std.log.info("[WorkerMovement] After action, checking target: old=({d},{d}) new=({d},{d})", .{
@@ -590,27 +561,13 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                             // Not a pickup - task complete, remove component
                             std.log.info("[WorkerMovement] Removing MovementTarget (same position)", .{});
                             registry.remove(MovementTarget, entity);
-                            target_was_removed = true;
+                            // Note: After storeCompleted, the task engine handles worker reassignment
+                            // via reevaluateWorkstations() which calls tryAssignDanglingItems()
                         }
                     } else {
                         std.log.info("[WorkerMovement] Keeping MovementTarget (new position set by hook)", .{});
                     }
                     // else: new target was set by hook, keep it
-                }
-            }
-
-            // If we removed the MovementTarget and it's a Worker with no new task,
-            // try to assign remaining dangling items or notify engine worker is idle
-            if (target_was_removed and registry.tryGet(Worker, entity) != null) {
-                // Check if this was a dangling item delivery (not task-engine managed)
-                // by checking if the old action was .store and there's no MovementTarget now
-                if (old_action == .store and registry.tryGet(MovementTarget, entity) == null) {
-                    // Try to assign a remaining dangling item first
-                    if (!tryAssignDanglingItem(registry, entity, worker_id)) {
-                        // No more dangling items, worker is now idle
-                        std.log.info("[WorkerMovement] Calling workerAvailable for worker {d}", .{worker_id});
-                        _ = Context.workerAvailable(worker_id);
-                    }
                 }
             }
         } else {

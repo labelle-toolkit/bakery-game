@@ -15,6 +15,9 @@ const movement_target = @import("../components/movement_target.zig");
 const work_progress = @import("../components/work_progress.zig");
 const items = @import("../enums/items.zig");
 
+// Import bread prefab for instantiation in process_completed
+const bread_prefab = @import("../prefabs/bread.zon");
+
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
 const WorkProgress = work_progress.WorkProgress;
@@ -157,13 +160,43 @@ pub const GameHooks = struct {
     }
 
     pub fn store_started(payload: anytype) void {
-        log.info("store_started: worker={d} target_eos={d}", .{ payload.worker_id, payload.storage_id });
+        log.info("store_started: worker={d} target_storage={d}", .{ payload.worker_id, payload.storage_id });
 
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
 
+        // Check if target is an EIS (dangling item delivery) or EOS (post-process store)
+        const target_entity = engine.entityFromU64(payload.storage_id);
+        const target_storage = registry.tryGet(Storage, target_entity) orelse {
+            log.err("store_started: target storage {d} not found", .{payload.storage_id});
+            return;
+        };
+
+        if (target_storage.role == .eis) {
+            // Dangling item delivery - move directly to EIS
+            const eis_pos = registry.tryGet(Position, target_entity) orelse {
+                log.err("store_started: EIS {d} has no Position", .{payload.storage_id});
+                return;
+            };
+
+            log.info("store_started: worker {d} moving to EIS {d} at ({d},{d}) (dangling delivery)", .{
+                payload.worker_id,
+                payload.storage_id,
+                eis_pos.x,
+                eis_pos.y,
+            });
+
+            registry.set(worker_entity, MovementTarget{
+                .target_x = eis_pos.x,
+                .target_y = eis_pos.y,
+                .action = .store,
+            });
+            return;
+        }
+
+        // Post-process store flow: target is EOS, need to go via IOS
         // Save the target EOS for later (when worker arrives at IOS and needs to go to EOS)
         ensureWorkerItemsInit();
         worker_store_target.put(payload.worker_id, payload.storage_id) catch {};
@@ -405,7 +438,8 @@ pub const GameHooks = struct {
 
     /// Handle work completion at a workstation.
     /// Creates the output item entity at the IOS position.
-    /// Note: Don't call Context.itemAdded - the engine already knows about the output.
+    /// Must call Context.itemAdded to notify engine of output item type in IOS
+    /// (needed for store_started to be dispatched).
     pub fn process_completed(payload: anytype) void {
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
@@ -425,25 +459,41 @@ pub const GameHooks = struct {
                 const ios_pos = registry.tryGet(Position, storage_entity) orelse continue;
 
                 // Create the output item entity (bread)
-                // Use registry.add() to trigger onAdd callback which tracks entity with render pipeline
+                // Use game.addShape() to properly track entity with render pipeline
                 const game_ptr = payload.game orelse continue;
                 const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
                 const item_entity = game.createEntity();
-                game.setWorldPositionXY(item_entity, ios_pos.x, ios_pos.y);
-                registry.add(item_entity, Shape{
+                // Must add Position component BEFORE setWorldPositionXY (it requires existing Position)
+                game.addPosition(item_entity, .{ .x = ios_pos.x, .y = ios_pos.y });
+                // Create bread shape (using prefab values as reference)
+                // Note: Can't directly use prefab struct due to type coercion issues
+                const bread_shape = Shape{
                     .shape = .{ .rectangle = .{ .width = 25, .height = 25 } },
-                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 }, // Bread color (golden brown)
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 }, // Golden brown
                     .z_index = 20,
                     .visible = true,
+                };
+                log.warn("process_completed: bread shape z_index={d}, color=({d},{d},{d},{d}), visible={}", .{
+                    bread_shape.z_index,
+                    bread_shape.color.r, bread_shape.color.g, bread_shape.color.b, bread_shape.color.a,
+                    bread_shape.visible,
                 });
+                game.addShape(item_entity, bread_shape) catch |err| {
+                    log.err("process_completed: failed to add shape: {}", .{err});
+                    continue;
+                };
                 // Mark as dangling item so it can be picked up for store step
                 registry.add(item_entity, main.labelle_tasksBindItems.DanglingItem{
                     .item_type = output_item,
                 });
 
-                // Track the output item at IOS
+                // Track the output item at IOS (game-side tracking)
                 ensureWorkerItemsInit();
                 storage_items.put(storage_id, engine.entityToU64(item_entity)) catch {};
+
+                // Notify task engine about the output item in IOS
+                // This sets storage.item_type which is needed for store_started to be dispatched
+                _ = Context.itemAdded(storage_id, output_item);
 
                 log.info("process_completed: created {s} entity {d} at IOS {d}", .{
                     @tagName(output_item),
