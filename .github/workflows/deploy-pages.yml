@@ -87,8 +87,9 @@ jobs:
           echo "C_INCLUDE_PATH: $C_INCLUDE_PATH"
           ls -la "$C_INCLUDE_PATH" | head -5
 
-          # Build WASM target (Debug mode to include gizmos)
-          zig build -Dtarget=wasm32-emscripten -Doptimize=Debug
+          # Build WASM target with ReleaseSmall for production
+          # Debug mode causes frame drops due to std.log overhead in WASM/JS console
+          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseSmall
 
           # List output
           echo "=== Build output ==="
