@@ -9,6 +9,7 @@ const engine = @import("labelle-engine");
 const main = @import("../main.zig");
 const movement_target = @import("../components/movement_target.zig");
 const task_hooks = @import("../hooks/task_hooks.zig");
+const eos_transport = @import("eos_transport.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
@@ -408,40 +409,133 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     _ = Context.pickupCompleted(worker_id);
                 },
                 .transport_pickup => {
-                    // Worker arrived to pick up item from storage for transport
+                    // Worker arrived at EOS to pick up item for EOS-to-EIS transport
                     task_hooks.ensureWorkerItemsInit();
-                    if (task_hooks.worker_pickup_storage.get(worker_id)) |storage_id| {
-                        if (task_hooks.storage_items.get(storage_id)) |item_id| {
-                            const item_entity = engine.entityFromU64(item_id);
+                    eos_transport.ensureInit();
 
-                            // Attach item to worker (parent/child relationship)
-                            game.setParent(item_entity, entity) catch |err| {
-                                std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
-                            };
-                            game.setLocalPositionXY(item_entity, 0, 10);
+                    // Get the EOS this worker is picking from
+                    const eos_id = eos_transport.worker_transport_from.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] transport_pickup: no EOS tracked for worker {d}", .{worker_id});
+                        registry.remove(MovementTarget, entity);
+                        break;
+                    };
 
-                            // Track that worker is carrying this item
-                            task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
+                    // Get the item at EOS
+                    const item_id = task_hooks.storage_items.get(eos_id) orelse {
+                        std.log.warn("[WorkerMovement] transport_pickup: no item found at EOS {d}", .{eos_id});
+                        // Clean up tracking since transport failed
+                        _ = eos_transport.worker_transport_from.remove(worker_id);
+                        _ = eos_transport.worker_transport_to.remove(worker_id);
+                        _ = eos_transport.pending_transports.remove(eos_id);
+                        registry.remove(MovementTarget, entity);
+                        break;
+                    };
 
-                            // Remove item from storage tracking
-                            _ = task_hooks.storage_items.remove(storage_id);
+                    const item_entity = engine.entityFromU64(item_id);
 
-                            std.log.info("[WorkerMovement] transport_pickup: attached item {d} from storage {d} to worker {d}", .{
-                                item_id, storage_id, worker_id,
-                            });
-                        } else {
-                            std.log.warn("[WorkerMovement] transport_pickup: no item found at storage {d}", .{storage_id});
+                    // Attach item to worker (parent/child relationship)
+                    game.setParent(item_entity, entity) catch |err| {
+                        std.log.err("[WorkerMovement] transport_pickup: failed to attach item to worker: {}", .{err});
+                    };
+                    game.setLocalPositionXY(item_entity, 0, 10);
+
+                    // Track that worker is carrying this item
+                    task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
+
+                    // Remove item from EOS storage tracking
+                    _ = task_hooks.storage_items.remove(eos_id);
+
+                    std.log.info("[WorkerMovement] transport_pickup: worker {d} picked up item {d} from EOS {d}", .{
+                        worker_id, item_id, eos_id,
+                    });
+
+                    // Get the EIS destination
+                    const eis_id = eos_transport.worker_transport_to.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] transport_pickup: no EIS destination for worker {d}", .{worker_id});
+                        // Clean up tracking
+                        _ = eos_transport.worker_transport_from.remove(worker_id);
+                        _ = eos_transport.pending_transports.remove(eos_id);
+                        registry.remove(MovementTarget, entity);
+                        break;
+                    };
+
+                    // Get EIS position
+                    const eis_entity = engine.entityFromU64(eis_id);
+                    const eis_pos = registry.tryGet(Position, eis_entity) orelse {
+                        std.log.warn("[WorkerMovement] transport_pickup: EIS {d} has no Position", .{eis_id});
+                        _ = eos_transport.worker_transport_from.remove(worker_id);
+                        _ = eos_transport.worker_transport_to.remove(worker_id);
+                        _ = eos_transport.pending_transports.remove(eos_id);
+                        registry.remove(MovementTarget, entity);
+                        break;
+                    };
+
+                    std.log.info("[WorkerMovement] transport_pickup: worker {d} moving to EIS {d} at ({d},{d})", .{
+                        worker_id, eis_id, eis_pos.x, eis_pos.y,
+                    });
+
+                    // Set target to EIS with transport_deliver action
+                    registry.set(entity, MovementTarget{
+                        .target_x = eis_pos.x,
+                        .target_y = eis_pos.y,
+                        .action = .transport_deliver,
+                    });
+                },
+                .transport_deliver => {
+                    // Worker arrived at EIS to deliver item from EOS
+                    task_hooks.ensureWorkerItemsInit();
+                    eos_transport.ensureInit();
+
+                    // Get the item the worker is carrying
+                    const item_id = task_hooks.worker_carried_items.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] transport_deliver: worker {d} not carrying any item", .{worker_id});
+                        // Clean up tracking
+                        if (eos_transport.worker_transport_from.get(worker_id)) |eos_id| {
+                            _ = eos_transport.pending_transports.remove(eos_id);
                         }
+                        _ = eos_transport.worker_transport_from.remove(worker_id);
+                        _ = eos_transport.worker_transport_to.remove(worker_id);
+                        registry.remove(MovementTarget, entity);
+                        break;
+                    };
 
-                        // Clean up pickup tracking
-                        _ = task_hooks.worker_pickup_storage.remove(worker_id);
-                    } else {
-                        std.log.warn("[WorkerMovement] transport_pickup: no pickup storage tracked for worker {d}", .{worker_id});
-                    }
+                    // Get the EIS destination
+                    const eis_id = eos_transport.worker_transport_to.get(worker_id) orelse {
+                        std.log.warn("[WorkerMovement] transport_deliver: no EIS tracked for worker {d}", .{worker_id});
+                        registry.remove(MovementTarget, entity);
+                        break;
+                    };
 
-                    // Remove MovementTarget before calling pickupCompleted since hooks may set a new one
+                    const item_entity = engine.entityFromU64(item_id);
+                    const eis_entity = engine.entityFromU64(eis_id);
+                    const eis_pos = registry.tryGet(Position, eis_entity) orelse {
+                        std.log.warn("[WorkerMovement] transport_deliver: EIS {d} has no Position", .{eis_id});
+                        registry.remove(MovementTarget, entity);
+                        break;
+                    };
+
+                    // Detach item from worker and place at EIS
+                    game.removeParent(item_entity);
+                    game.setWorldPositionXY(item_entity, eis_pos.x, eis_pos.y);
+
+                    // Track item at EIS storage
+                    task_hooks.storage_items.put(eis_id, item_id) catch {};
+
+                    // Get EOS id for cleanup
+                    const eos_id = eos_transport.worker_transport_from.get(worker_id) orelse 0;
+
+                    std.log.info("[WorkerMovement] transport_deliver: worker {d} delivered item {d} from EOS {d} to EIS {d}", .{
+                        worker_id, item_id, eos_id, eis_id,
+                    });
+
+                    // Clean up all transport tracking
+                    _ = task_hooks.worker_carried_items.remove(worker_id);
+                    _ = eos_transport.pending_transports.remove(eos_id);
+                    _ = eos_transport.worker_transport_from.remove(worker_id);
+                    _ = eos_transport.worker_transport_to.remove(worker_id);
+
+                    // Remove MovementTarget - worker is now idle and available for new tasks
                     registry.remove(MovementTarget, entity);
-                    _ = Context.pickupCompleted(worker_id);
                 },
                 .pickup_from_ios => {
                     // Worker arrived at IOS to pick up the output item (bread)
@@ -537,9 +631,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 },
             }
 
-            // Skip target comparison for actions that call pickupCompleted and remove MovementTarget
+            // Skip target comparison for actions that manually remove MovementTarget
             // Note: .pickup now sets a new target to IIS, so it should NOT skip the check
-            const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .pickup_from_ios);
+            const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .transport_deliver or old_action == .pickup_from_ios);
 
             // Only remove MovementTarget if no new target was set by hooks
             if (!skip_target_check) {
