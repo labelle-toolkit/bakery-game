@@ -408,29 +408,21 @@ pub const GameHooks = struct {
 
     /// Handle input item being consumed during processing.
     /// Called by the task engine when an IIS item is consumed.
-    /// Hide the item entity (don't destroy, as it may be scene-managed).
+    /// Remove the item's visual (Shape) so it disappears from screen.
     pub fn input_consumed(payload: anytype) void {
-        const registry_ptr = payload.registry orelse return;
-        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
         const game_ptr = payload.game orelse return;
         const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
-        _ = game;
 
         const storage_id = payload.storage_id;
 
-        // Look up the item entity at this storage and hide it
-        // (don't destroy, as scene-managed entities would cause crash on scene deinit)
+        // Look up the item entity at this storage and remove its visual
         ensureWorkerItemsInit();
         if (storage_items.get(storage_id)) |item_id| {
             const item_entity = engine.entityFromU64(item_id);
-            // Hide the item by setting its Shape to invisible
-            if (registry.tryGet(Shape, item_entity)) |shape| {
-                var new_shape = shape.*;
-                new_shape.visible = false;
-                registry.set(item_entity, new_shape);
-            }
+            // Remove Shape component - this properly untracks from render pipeline
+            game.removeShape(item_entity);
             _ = storage_items.remove(storage_id);
-            log.info("input_consumed: hid item {d} from storage {d}", .{ item_id, storage_id });
+            log.info("input_consumed: removed shape from item {d} at storage {d}", .{ item_id, storage_id });
         } else {
             log.warn("input_consumed: no item tracked at storage {d}", .{storage_id});
         }
