@@ -406,9 +406,37 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     _ = task_hooks.worker_carried_items.remove(worker_id);
                     _ = task_hooks.worker_pickup_storage.remove(worker_id);
 
-                    // Now call pickupCompleted - task engine will advance to Process step
+                    // Remove MovementTarget before calling pickupCompleted
+                    // (pickup_started hook may set a new one if there's another pickup)
                     registry.remove(MovementTarget, entity);
+
+                    // Call pickupCompleted - task engine will advance state
+                    // NOTE: pickupCompleted may trigger pickup_started for next EIS,
+                    // which sets a new MovementTarget. Only redirect to workstation
+                    // if no new pickup was triggered.
                     _ = Context.pickupCompleted(worker_id);
+
+                    // Check if worker still needs to go to workstation after pickups complete
+                    // (pickup_started may have set a new MovementTarget for next pickup)
+                    if (registry.tryGet(MovementTarget, entity) == null) {
+                        // No new pickup target - check if worker is pending arrival at workstation
+                        if (task_hooks.worker_pending_arrival.get(worker_id)) |_| {
+                            // Get workstation position and redirect worker there
+                            if (task_hooks.worker_workstation.get(worker_id)) |ws_id| {
+                                const ws_entity = engine.entityFromU64(ws_id);
+                                if (registry.tryGet(Position, ws_entity)) |ws_pos| {
+                                    std.log.info("[WorkerMovement] deliver_to_iis: pickups complete, worker {d} moving to workstation {d} at ({d},{d})", .{
+                                        worker_id, ws_id, ws_pos.x, ws_pos.y,
+                                    });
+                                    registry.set(entity, MovementTarget{
+                                        .target_x = ws_pos.x,
+                                        .target_y = ws_pos.y,
+                                        .action = .arrive_at_workstation,
+                                    });
+                                }
+                            }
+                        }
+                    }
                 },
                 .transport_pickup => {
                     // Worker arrived at EOS to pick up item for EOS-to-EIS transport
