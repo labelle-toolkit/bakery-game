@@ -61,8 +61,8 @@
         },
         // Oven Workstation (includes all storages: 2 EIS, 2 IIS, 1 IOS, 1 EOS)
         .{ .prefab = "oven" },
-        // Water Well (commented out due to nested entity issue)
-        // .{ .prefab = "water_well" },
+        // Water Well - Producer workstation (no EIS/IIS, just IOS and 4 EOS)
+        .{ .prefab = "water_well" },
         // IOS - Bread storage (internal output for oven - commented out)
         // .{
         //     .components = .{

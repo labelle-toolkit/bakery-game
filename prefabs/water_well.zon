@@ -6,17 +6,84 @@
             .color = .{ .r = 50, .g = 100, .b = 200, .a = 255 },
         },
         .Workstation = .{
-            .process_duration = 60,
-            // Producer workstation: no EIS/IIS inputs
-            // Storage roles determine workflow position
+            .process_duration = 3,
+            // Producer workstation: no EIS/IIS inputs, just produces water
             .storages = .{
-                .{ .components = .{ .Storage = .{ .role = .ios, .accepts = .Water } } },
-                .{ .components = .{ .Storage = .{ .role = .eos, .accepts = .Water } } },
+                // IOS - Water appears here after processing
+                .{
+                    .components = .{
+                        .Position = .{ .x = 0, .y = 0 },
+                        .Shape = .{
+                            .shape = .{ .rectangle = .{ .width = 25, .height = 25, .fill = .outline } },
+                            .color = .{ .r = 100, .g = 150, .b = 220, .a = 255 },
+                        },
+                        .Storage = .{ .role = .ios, .accepts = .Water },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "IOS", .size = 10, .y = 20, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                    },
+                },
+                // EOS 1 - Top
+                .{
+                    .components = .{
+                        .Position = .{ .x = 0, .y = -60 },
+                        .Shape = .{
+                            .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
+                            .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
+                        },
+                        .Storage = .{ .role = .eos, .accepts = .Water },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "EOS1", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                    },
+                },
+                // EOS 2 - Right
+                .{
+                    .components = .{
+                        .Position = .{ .x = 60, .y = 0 },
+                        .Shape = .{
+                            .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
+                            .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
+                        },
+                        .Storage = .{ .role = .eos, .accepts = .Water },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "EOS2", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                    },
+                },
+                // EOS 3 - Bottom
+                .{
+                    .components = .{
+                        .Position = .{ .x = 0, .y = 60 },
+                        .Shape = .{
+                            .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
+                            .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
+                        },
+                        .Storage = .{ .role = .eos, .accepts = .Water },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "EOS3", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                    },
+                },
+                // EOS 4 - Left
+                .{
+                    .components = .{
+                        .Position = .{ .x = -60, .y = 0 },
+                        .Shape = .{
+                            .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
+                            .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
+                        },
+                        .Storage = .{ .role = .eos, .accepts = .Water },
+                    },
+                    .gizmos = .{
+                        .Text = .{ .text = "EOS4", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                    },
+                },
             },
         },
     },
     .gizmos = .{
-        .Text = .{ .text = "Water Well", .size = 12, .y = -40, .color = .{ .r = 100, .g = 200, .b = 255, .a = 255 } },
+        .Text = .{ .text = "Water Well", .size = 12, .y = -80, .color = .{ .r = 100, .g = 200, .b = 255, .a = 255 } },
         .BoundingBox = .{ .color = .{ .r = 50, .g = 100, .b = 200, .a = 180 }, .padding = 4 },
     },
 }
