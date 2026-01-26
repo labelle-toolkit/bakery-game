@@ -43,6 +43,8 @@ pub var worker_pickup_storage: std.AutoHashMap(u64, u64) = undefined;
 pub var worker_workstation: std.AutoHashMap(u64, u64) = undefined;
 /// Track target EOS for store step (worker_id -> eos_id)
 pub var worker_store_target: std.AutoHashMap(u64, u64) = undefined;
+/// Track workers that need to move to workstation before starting work (worker_id -> true)
+pub var worker_pending_arrival: std.AutoHashMap(u64, bool) = undefined;
 var worker_items_initialized: bool = false;
 
 pub fn ensureWorkerItemsInit() void {
@@ -54,6 +56,7 @@ pub fn ensureWorkerItemsInit() void {
         worker_pickup_storage = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         worker_workstation = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         worker_store_target = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
+        worker_pending_arrival = std.AutoHashMap(u64, bool).init(std.heap.c_allocator);
         worker_items_initialized = true;
     }
 }
@@ -68,11 +71,39 @@ pub fn ensureWorkerItemsInit() void {
 /// - .game: ?*engine.Game
 pub const GameHooks = struct {
     /// Handle worker being assigned to a workstation.
-    /// Track the assignment so we can find IIS storages during pickup.
+    /// Move the worker to the workstation position before starting work.
     pub fn worker_assigned(payload: anytype) void {
         log.info("worker_assigned: worker={d} workstation={d}", .{ payload.worker_id, payload.workstation_id });
         ensureWorkerItemsInit();
         worker_workstation.put(payload.worker_id, payload.workstation_id) catch {};
+
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        // Get workstation position
+        const ws_entity = engine.entityFromU64(payload.workstation_id);
+        const ws_pos = registry.tryGet(Position, ws_entity) orelse {
+            log.err("worker_assigned: workstation {d} has no Position", .{payload.workstation_id});
+            return;
+        };
+
+        // Mark worker as pending arrival (don't start work until they arrive)
+        worker_pending_arrival.put(payload.worker_id, true) catch {};
+
+        // Set MovementTarget to move worker to workstation
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, MovementTarget{
+            .target_x = ws_pos.x,
+            .target_y = ws_pos.y,
+            .action = .arrive_at_workstation,
+        });
+
+        log.info("worker_assigned: worker {d} moving to workstation {d} at ({d},{d})", .{
+            payload.worker_id,
+            payload.workstation_id,
+            ws_pos.x,
+            ws_pos.y,
+        });
     }
 
     /// Handle worker being released from a workstation.
@@ -383,7 +414,16 @@ pub const GameHooks = struct {
 
     /// Handle worker starting to process at a workstation.
     /// Sets up WorkProgress component to track work time.
+    /// If worker is still moving to workstation, defer until arrival.
     pub fn process_started(payload: anytype) void {
+        ensureWorkerItemsInit();
+
+        // Check if worker is still moving to workstation
+        if (worker_pending_arrival.get(payload.worker_id)) |_| {
+            log.info("process_started: worker={d} still moving to workstation, deferring", .{payload.worker_id});
+            return; // Will be started when worker arrives
+        }
+
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 

@@ -8,6 +8,7 @@ const std = @import("std");
 const engine = @import("labelle-engine");
 const main = @import("../main.zig");
 const movement_target = @import("../components/movement_target.zig");
+const work_progress = @import("../components/work_progress.zig");
 const task_hooks = @import("../hooks/task_hooks.zig");
 const eos_transport = @import("eos_transport.zig");
 
@@ -17,6 +18,7 @@ const Position = engine.render.Position;
 const Context = main.labelle_tasksContext;
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
+const WorkProgress = work_progress.WorkProgress;
 const BoundTypes = main.labelle_tasksBindItems;
 const Storage = BoundTypes.Storage;
 const DanglingItem = BoundTypes.DanglingItem;
@@ -627,7 +629,28 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                 },
                 .arrive_at_workstation => {
                     // Worker arrived at workstation to start work
-                    _ = Context.storeCompleted(worker_id);
+                    std.log.info("[WorkerMovement] arrive_at_workstation: worker {d} arrived", .{worker_id});
+
+                    // Clear pending arrival flag
+                    task_hooks.ensureWorkerItemsInit();
+                    _ = task_hooks.worker_pending_arrival.remove(worker_id);
+
+                    // Get workstation ID and start work
+                    if (task_hooks.worker_workstation.get(worker_id)) |workstation_id| {
+                        const ws_entity = engine.entityFromU64(workstation_id);
+                        if (registry.tryGet(Workstation, ws_entity)) |workstation| {
+                            // Set up WorkProgress to start the work timer
+                            registry.set(entity, WorkProgress{
+                                .workstation_id = workstation_id,
+                                .duration = @floatFromInt(workstation.process_duration),
+                            });
+                            std.log.info("[WorkerMovement] arrive_at_workstation: worker {d} starting work at workstation {d} (duration={d}s)", .{
+                                worker_id,
+                                workstation_id,
+                                workstation.process_duration,
+                            });
+                        }
+                    }
                 },
             }
 
