@@ -475,6 +475,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     // Remove item from EOS storage tracking
                     _ = task_hooks.storage_items.remove(eos_id);
 
+                    // NOTE: Don't notify task engine here - wait until transport_deliver completes
+                    // Otherwise worker_assigned fires while worker is mid-transport
+
                     std.log.info("[WorkerMovement] transport_pickup: worker {d} picked up item {d} from EOS {d}", .{
                         worker_id, item_id, eos_id,
                     });
@@ -558,14 +561,35 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                         worker_id, item_id, eos_id, eis_id,
                     });
 
+                    // Get the EIS storage to find what item type it accepts
+                    const eis_storage = registry.tryGet(Storage, eis_entity);
+
                     // Clean up all transport tracking
                     _ = task_hooks.worker_carried_items.remove(worker_id);
                     _ = eos_transport.pending_transports.remove(eos_id);
                     _ = eos_transport.worker_transport_from.remove(worker_id);
                     _ = eos_transport.worker_transport_to.remove(worker_id);
 
-                    // Remove MovementTarget - worker is now idle and available for new tasks
+                    // Remove MovementTarget - worker is now idle
                     registry.remove(MovementTarget, entity);
+
+                    // Notify task engine that EIS has an item
+                    if (eis_storage) |storage| {
+                        if (storage.accepts) |item_type| {
+                            _ = Context.itemAdded(eis_id, item_type);
+                            std.log.info("[WorkerMovement] transport_deliver: notified task engine of item at EIS {d}", .{eis_id});
+                        }
+                    }
+
+                    // Notify task engine that EOS is empty (allows producer workstations to produce more)
+                    // This must happen AFTER transport completes, not during transport_pickup
+                    _ = Context.itemRemoved(eos_id);
+                    std.log.info("[WorkerMovement] transport_deliver: notified task engine EOS {d} is empty", .{eos_id});
+
+                    // Notify task engine that worker is available - this triggers re-evaluation
+                    // which may assign the worker to a workstation (e.g., Well now has free EOS)
+                    _ = Context.workerAvailable(worker_id);
+                    std.log.info("[WorkerMovement] transport_deliver: notified task engine worker {d} is available", .{worker_id});
                 },
                 .pickup_from_ios => {
                     // Worker arrived at IOS to pick up the output item (bread)
