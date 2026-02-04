@@ -25,69 +25,6 @@ const DanglingItem = BoundTypes.DanglingItem;
 const Worker = BoundTypes.Worker;
 const Workstation = BoundTypes.Workstation;
 
-/// Try to assign the given worker to pick up a remaining dangling item
-fn tryAssignDanglingItem(registry: anytype, worker_entity: anytype, worker_id: u64) bool {
-    std.log.info("[WorkerMovement] tryAssignDanglingItem: looking for remaining dangling items for worker {d}", .{worker_id});
-
-    // Query for dangling items that still exist
-    var dangling_view = registry.view(.{ DanglingItem, Position });
-    var dangling_iter = dangling_view.entityIterator();
-
-    var dangling_count: u32 = 0;
-
-    while (dangling_iter.next()) |dangling_entity| {
-        const dangling_item = dangling_view.get(DanglingItem, dangling_entity);
-        const dangling_pos = dangling_view.get(Position, dangling_entity);
-        const dangling_id = engine.entityToU64(dangling_entity);
-        dangling_count += 1;
-
-        std.log.info("[WorkerMovement] tryAssignDanglingItem: found dangling item {d} ({s}) at ({d},{d})", .{
-            dangling_id,
-            @tagName(dangling_item.item_type),
-            dangling_pos.x,
-            dangling_pos.y,
-        });
-
-        // Find matching EIS that accepts this item type
-        var storage_view = registry.view(.{ Storage, Position });
-        var storage_iter = storage_view.entityIterator();
-
-        while (storage_iter.next()) |storage_entity| {
-            const storage = storage_view.get(Storage, storage_entity);
-
-            // Only assign to EIS storages that accept this item type
-            if (storage.role != .eis) continue;
-            const accepts = storage.accepts orelse continue;
-            if (accepts != dangling_item.item_type) continue;
-
-            const storage_id = engine.entityToU64(storage_entity);
-
-            // Assign worker to pick up this dangling item
-            registry.set(worker_entity, MovementTarget{
-                .target_x = dangling_pos.x,
-                .target_y = dangling_pos.y,
-                .action = .pickup_dangling,
-            });
-
-            // Track the item the worker will pick up
-            task_hooks.ensureWorkerItemsInit();
-            task_hooks.worker_carried_items.put(worker_id, dangling_id) catch {};
-            task_hooks.dangling_item_targets.put(dangling_id, storage_id) catch {};
-
-            std.log.info("[WorkerMovement] Assigned worker {d} to pick up remaining dangling item {d} ({s}) -> EIS {d}", .{
-                worker_id,
-                dangling_id,
-                @tagName(dangling_item.item_type),
-                storage_id,
-            });
-
-            return true;
-        }
-    }
-    std.log.info("[WorkerMovement] tryAssignDanglingItem: no remaining dangling items found (checked {d} items)", .{dangling_count});
-    return false;
-}
-
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
     _ = game;
@@ -182,6 +119,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
                     if (!item_found) {
                         std.log.warn("[WorkerMovement] pickup_dangling: no dangling item found at worker position!", .{});
+                        _ = Context.workerAvailable(worker_id);
                     }
                 },
                 .store => {
@@ -733,7 +671,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                             std.log.info("[WorkerMovement] Removing MovementTarget (same position)", .{});
                             registry.remove(MovementTarget, entity);
                             // Note: After storeCompleted, the task engine handles worker reassignment
-                            // via reevaluateWorkstations() which calls tryAssignDanglingItems()
+                            // via reevaluateWorkstations() which may assign to other tasks
                         }
                     } else {
                         std.log.info("[WorkerMovement] Keeping MovementTarget (new position set by hook)", .{});
