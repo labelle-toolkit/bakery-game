@@ -119,6 +119,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
                     if (!item_found) {
                         std.log.warn("[WorkerMovement] pickup_dangling: no dangling item found at worker position!", .{});
+                        // Clean up worker tracking state before marking as available
+                        task_hooks.ensureWorkerItemsInit();
+                        _ = task_hooks.worker_carried_items.remove(worker_id);
                         _ = Context.workerAvailable(worker_id);
                     }
                 },
