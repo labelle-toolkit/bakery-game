@@ -581,8 +581,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     _ = Context.workerAvailable(worker_id);
                     std.log.info("[WorkerMovement] transport_deliver: notified task engine worker {d} is available", .{worker_id});
 
-                    _ = Context.itemRemoved(eos_id);
-                    std.log.info("[WorkerMovement] transport_deliver: notified task engine EOS {d} is empty", .{eos_id});
+                    if (eos_id != 0) {
+                        _ = Context.itemRemoved(eos_id);
+                        std.log.info("[WorkerMovement] transport_deliver: notified task engine EOS {d} is empty", .{eos_id});
+                    }
 
                     if (eis_storage) |storage| {
                         if (storage.accepts) |item_type| {
