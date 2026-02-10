@@ -573,23 +573,25 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     // Remove MovementTarget - worker is now idle
                     registry.remove(MovementTarget, entity);
 
-                    // Notify task engine that EIS has an item
+                    // Notify task engine of state changes.
+                    // Order matters: workerAvailable must come BEFORE itemAdded/itemRemoved,
+                    // because those trigger re-evaluation which may immediately assign the
+                    // worker to a workstation. If workerAvailable comes after, it resets
+                    // the assignment (sets state=Idle, assigned_workstation=null).
+                    _ = Context.workerAvailable(worker_id);
+                    std.log.info("[WorkerMovement] transport_deliver: notified task engine worker {d} is available", .{worker_id});
+
+                    if (eos_id != 0) {
+                        _ = Context.itemRemoved(eos_id);
+                        std.log.info("[WorkerMovement] transport_deliver: notified task engine EOS {d} is empty", .{eos_id});
+                    }
+
                     if (eis_storage) |storage| {
                         if (storage.accepts) |item_type| {
                             _ = Context.itemAdded(eis_id, item_type);
                             std.log.info("[WorkerMovement] transport_deliver: notified task engine of item at EIS {d}", .{eis_id});
                         }
                     }
-
-                    // Notify task engine that EOS is empty (allows producer workstations to produce more)
-                    // This must happen AFTER transport completes, not during transport_pickup
-                    _ = Context.itemRemoved(eos_id);
-                    std.log.info("[WorkerMovement] transport_deliver: notified task engine EOS {d} is empty", .{eos_id});
-
-                    // Notify task engine that worker is available - this triggers re-evaluation
-                    // which may assign the worker to a workstation (e.g., Well now has free EOS)
-                    _ = Context.workerAvailable(worker_id);
-                    std.log.info("[WorkerMovement] transport_deliver: notified task engine worker {d} is available", .{worker_id});
                 },
                 .pickup_from_ios => {
                     // Worker arrived at IOS to pick up the output item (bread)

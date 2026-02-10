@@ -2,7 +2,7 @@
     .version = 1,
     .name = "bakery-game",
     .description = "A bakery simulation demonstrating labelle-tasks plugin hooks",
-    .engine_version = "0.52.21",
+    .engine_version = "0.52.22",
     .initial_scene = "main",
     .targets = .{ .raylib_desktop, .raylib_wasm },
     .ecs_backend = .zig_ecs,
@@ -24,7 +24,7 @@
     .plugins = .{
         .{
             .name = "labelle-tasks",
-            .version = "0.14.0",
+            .version = "0.15.0",
             .bind = .{
                 .{ .func = "bind", .arg = "Items", .components = "Storage,Worker,DanglingItem,Workstation" },
             },
