@@ -87,21 +87,25 @@ jobs:
           echo "C_INCLUDE_PATH: $C_INCLUDE_PATH"
           ls -la "$C_INCLUDE_PATH" | head -5
 
-          # Pre-fetch dependencies to download emsdk
-          echo "=== Pre-fetching dependencies ==="
-          zig build --fetch-only -Dtarget=wasm32-emscripten -Doptimize=ReleaseSmall || true
+          # First build attempt - downloads emsdk into .zig-cache but fails because
+          # emcc script lacks execute permissions after extraction from archive
+          echo "=== First build attempt (downloads emsdk) ==="
+          zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseSmall || true
 
           # Make emscripten scripts executable (they lose permissions when extracted from git archive)
           echo "=== Making emsdk scripts executable ==="
-          find $GITHUB_WORKSPACE/.zig-cache -path "*/upstream/emscripten/emcc" -type f -exec chmod +x {} \; 2>/dev/null || true
-          find $GITHUB_WORKSPACE/.zig-cache -path "*/upstream/emscripten/em++" -type f -exec chmod +x {} \; 2>/dev/null || true
-          find $GITHUB_WORKSPACE/.zig-cache -path "*/upstream/emscripten/emcc.py" -type f -exec chmod +x {} \; 2>/dev/null || true
-          find $GITHUB_WORKSPACE/.zig-cache -path "*/emsdk" -name "emsdk" -type f -exec chmod +x {} \; 2>/dev/null || true
-          find $GITHUB_WORKSPACE/.zig-cache -path "*/emsdk.py" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find $GITHUB_WORKSPACE/.zig-cache -name "emcc" -path "*/emscripten/*" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find $GITHUB_WORKSPACE/.zig-cache -name "em++" -path "*/emscripten/*" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find $GITHUB_WORKSPACE/.zig-cache -name "emcc.py" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find $GITHUB_WORKSPACE/.zig-cache -name "emrun" -path "*/emscripten/*" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find $GITHUB_WORKSPACE/.zig-cache -name "emrun.py" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find $GITHUB_WORKSPACE/.zig-cache -name "emsdk" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find $GITHUB_WORKSPACE/.zig-cache -name "emsdk.py" -type f -exec chmod +x {} \; 2>/dev/null || true
+          # Also fix node binary permissions
+          find $GITHUB_WORKSPACE/.zig-cache -name "node" -path "*/bin/*" -type f -exec chmod +x {} \; 2>/dev/null || true
 
-          # Build WASM target with ReleaseSmall for production
-          # Debug mode causes frame drops due to std.log overhead in WASM/JS console
-          echo "=== Building WASM ==="
+          # Retry build with fixed permissions
+          echo "=== Building WASM (retry) ==="
           zig build -Dtarget=wasm32-emscripten -Doptimize=ReleaseSmall
 
           # List output
