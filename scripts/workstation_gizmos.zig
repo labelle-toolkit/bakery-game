@@ -66,7 +66,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     std.log.info("[WorkstationGizmos]   -> Storage at ({d:.0}, {d:.0}), role={s}", .{ storage_pos.x, storage_pos.y, @tagName(storage.role) });
                 }
 
-                game.drawLine(ws_pos.x, ws_pos.y, storage_pos.x, storage_pos.y, color);
+                game.gizmos.drawLine(ws_pos.x, ws_pos.y, storage_pos.x, storage_pos.y, color);
             }
         }
     }

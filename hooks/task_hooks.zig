@@ -385,7 +385,7 @@ pub const GameHooks = struct {
         }
 
         // Detach item from worker (was attached during transport)
-        game.removeParent(item_entity);
+        game.hierarchy.removeParent(item_entity);
 
         // Clean up worker→item tracking
         ensureWorkerItemsInit();
@@ -399,7 +399,7 @@ pub const GameHooks = struct {
         std.debug.print("[DEBUG] item_delivered: tracking item {d} at storage {d}\n", .{ payload.item_id, payload.storage_id });
         log.info("item_delivered: tracking item {d} at storage {d}", .{ payload.item_id, payload.storage_id });
 
-        game.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
+        game.pos.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
 
         const storage_z: u8 = if (registry.tryGet(Shape, storage_entity)) |s| @intCast(@min(@max(s.z_index, 0), 254)) else 128;
         game.setZIndex(item_entity, storage_z +| 1);
@@ -496,7 +496,7 @@ pub const GameHooks = struct {
                 const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
                 const item_entity = game.createEntity();
                 // Must add Position component BEFORE setWorldPositionXY (it requires existing Position)
-                game.addPosition(item_entity, .{ .x = ios_pos.x, .y = ios_pos.y });
+                game.pos.addPosition(item_entity, .{ .x = ios_pos.x, .y = ios_pos.y });
                 // Create bread shape (using prefab values as reference)
                 // Note: Can't directly use prefab struct due to type coercion issues
                 const bread_shape = Shape{
