@@ -10,13 +10,11 @@
         "workstation_gizmos",
     },
     .entities = .{
-        // Baker (Worker) - will pick up dangling items
-        .{
-            .prefab = "baker",
-            .components = .{
-                .Position = .{ .x = 400, .y = 300 },
-            },
-        },
+        .{ .prefab = "baker", .components = .{ .Position = .{ .x = 400, .y = 300 } } },
+        .{ .prefab = "baker", .components = .{ .Position = .{ .x = 450, .y = 300 } } },
+        .{ .prefab = "baker", .components = .{ .Position = .{ .x = 500, .y = 300 } } },
+        .{ .prefab = "baker", .components = .{ .Position = .{ .x = 550, .y = 300 } } },
+        .{ .prefab = "baker", .components = .{ .Position = .{ .x = 600, .y = 300 } } },
         // Dangling Flour item - will be picked up by worker (far left)
         .{
             .prefab = "flour",
