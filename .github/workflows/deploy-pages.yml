@@ -46,7 +46,20 @@ jobs:
 
       - name: Build generator
         working-directory: ../labelle-engine
-        run: zig build
+        run: |
+          success=0
+          for attempt in 1 2 3; do
+            if zig build; then
+              success=1
+              break
+            fi
+            echo "::warning::Build attempt $attempt failed (likely sokol-tools-bin LFS), retrying in 10s..."
+            sleep 10
+          done
+          if [ "$success" -ne 1 ]; then
+            echo "::error::All build attempts failed"
+            exit 1
+          fi
 
       - name: Generate build files
         run: |
