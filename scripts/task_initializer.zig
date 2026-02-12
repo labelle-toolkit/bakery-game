@@ -22,19 +22,17 @@ pub fn init(game: *Game, scene: *Scene) void {
 
     const registry = game.getRegistry();
 
-    // 1. Register and notify engine about all workers
+    // Workers are automatically registered via Worker component's onAdd callback
+    // (which calls addWorker + workerAvailable). Just log the count here.
     var worker_view = registry.view(.{Worker});
     var worker_iter = worker_view.entityIterator();
 
     var worker_count: u32 = 0;
-    while (worker_iter.next()) |entity| {
-        const worker_id = engine.entityToU64(entity);
-        _ = Context.workerAvailable(worker_id);
+    while (worker_iter.next()) |_| {
         worker_count += 1;
-        std.log.info("[TaskInitializer] Registered worker {d} with task engine", .{worker_id});
     }
 
-    std.log.info("[TaskInitializer] Initialized {d} workers for task engine", .{worker_count});
+    std.log.info("[TaskInitializer] Found {d} workers (registered via onAdd callbacks)", .{worker_count});
 
     // Note: Dangling items are automatically registered with the task engine via
     // DanglingItem component's onAdd callback. When workerAvailable() is called above,
