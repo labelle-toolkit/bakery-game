@@ -416,8 +416,11 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     // Remove item from EOS storage tracking
                     _ = task_hooks.storage_items.remove(eos_id);
 
-                    // NOTE: Don't notify task engine here - wait until transport_deliver completes
-                    // Otherwise worker_assigned fires while worker is mid-transport
+                    // Mark worker unavailable so the task engine won't assign them mid-transport
+                    _ = Context.workerUnavailable(worker_id);
+
+                    // Notify task engine that EOS is empty — producer can start next cycle immediately
+                    _ = Context.itemRemoved(eos_id);
 
                     std.log.info("[WorkerMovement] transport_pickup: worker {d} picked up item {d} from EOS {d}", .{
                         worker_id, item_id, eos_id,
