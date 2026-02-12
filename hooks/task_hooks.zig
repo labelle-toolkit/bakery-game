@@ -514,10 +514,10 @@ pub const GameHooks = struct {
                     log.err("process_completed: failed to add shape: {}", .{err});
                     continue;
                 };
-                // Mark as dangling item so it can be picked up for store step
-                registry.add(item_entity, main.labelle_tasksBindItems.DanglingItem{
-                    .item_type = output_item,
-                });
+                // NOTE: Do NOT add DanglingItem here. The engine's Store step handles
+                // IOS→EOS delivery via the assigned worker. Adding DanglingItem triggers
+                // evaluateDanglingItems() during handleWorkCompleted, causing reentrancy
+                // that corrupts the worker's assigned_workstation state.
 
                 // Track the output item at IOS (game-side tracking)
                 ensureWorkerItemsInit();
