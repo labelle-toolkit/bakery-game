@@ -413,36 +413,35 @@ pub const GameHooks = struct {
     }
 
     /// Handle worker starting to process at a workstation.
-    /// Sets up WorkProgress component to track work time.
-    /// If worker is still moving to workstation, defer until arrival.
+    /// Always moves the worker to the workstation first; work starts
+    /// when arrive_at_workstation fires in worker_movement.zig.
     pub fn process_started(payload: anytype) void {
         ensureWorkerItemsInit();
 
-        // Check if worker is still moving to workstation
+        // Already moving to workstation — nothing to do
         if (worker_pending_arrival.get(payload.worker_id)) |_| {
             log.info("process_started: worker={d} still moving to workstation, deferring", .{payload.worker_id});
-            return; // Will be started when worker arrives
+            return;
         }
 
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 
         const ws_entity = engine.entityFromU64(payload.workstation_id);
-        const workstation = registry.tryGet(Workstation, ws_entity) orelse {
-            log.err("process_started: workstation {d} has no Workstation component", .{payload.workstation_id});
-            return;
-        };
+        const ws_pos = registry.tryGet(Position, ws_entity) orelse return;
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
-        registry.set(worker_entity, WorkProgress{
-            .workstation_id = payload.workstation_id,
-            .duration = @floatFromInt(workstation.process_duration),
-        });
 
-        log.info("process_started: worker={d} workstation={d} duration={d}s", .{
-            payload.worker_id,
-            payload.workstation_id,
-            workstation.process_duration,
+        // Always move worker to workstation before starting work.
+        // If already there, arrive_at_workstation fires on the next frame.
+        worker_pending_arrival.put(payload.worker_id, true) catch {};
+        registry.set(worker_entity, MovementTarget{
+            .target_x = ws_pos.x,
+            .target_y = ws_pos.y,
+            .action = .arrive_at_workstation,
+        });
+        log.info("process_started: worker={d} moving to workstation {d} at ({d},{d})", .{
+            payload.worker_id, payload.workstation_id, ws_pos.x, ws_pos.y,
         });
     }
 
