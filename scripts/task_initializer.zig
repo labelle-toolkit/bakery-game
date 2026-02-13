@@ -11,7 +11,6 @@ const main = @import("../main.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
-const Context = main.labelle_tasksContext;
 const BoundTypes = main.labelle_tasksBindItems;
 const Worker = BoundTypes.Worker;
 
