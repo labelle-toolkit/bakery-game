@@ -17,6 +17,7 @@ const Scene = engine.Scene;
 const Position = engine.render.Position;
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
+const Context = main.labelle_tasksContext;
 const BoundTypes = main.labelle_tasksBindItems;
 const Storage = BoundTypes.Storage;
 const Worker = BoundTypes.Worker;
@@ -151,6 +152,10 @@ fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64)
                     .target_y = pos.y,
                     .action = .transport_pickup,
                 });
+
+                // Tell the task engine this worker is busy so it won't be
+                // reassigned to a workstation before the transport completes.
+                _ = Context.workerUnavailable(worker_id);
 
                 log.info("[EosTransport] Assigned worker {d} to transport {s} from EOS {d} to EIS {d}", .{
                     worker_id,
