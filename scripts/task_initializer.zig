@@ -15,7 +15,6 @@ const Scene = engine.Scene;
 const Entity = engine.Entity;
 const Position = engine.render.Position;
 const Shape = engine.render.Shape;
-const Context = main.labelle_tasksContext;
 const BoundTypes = main.labelle_tasksBindItems;
 const Worker = BoundTypes.Worker;
 const DanglingItem = BoundTypes.DanglingItem;
@@ -73,13 +72,6 @@ pub fn init(game: *Game, scene: *Scene) void {
     }
 
     std.log.info("[TaskInitializer] Queued {d} flour entities for deferred dangling registration", .{queued_count});
-
-    // Evaluate workstations and assign idle workers now that all entities are registered.
-    // Without this, workers sit idle until some other event triggers tryAssignWorkers.
-    if (Context.getEngine()) |task_eng| {
-        task_eng.reevaluateWorkstations();
-        std.log.info("[TaskInitializer] Evaluated workstations and assigned idle workers", .{});
-    }
 }
 
 pub fn deinit() void {
