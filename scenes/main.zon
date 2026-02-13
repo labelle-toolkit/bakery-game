@@ -15,23 +15,16 @@
         .{ .prefab = "baker", .components = .{ .Position = .{ .x = 500, .y = 300 } } },
         .{ .prefab = "baker", .components = .{ .Position = .{ .x = 550, .y = 300 } } },
         .{ .prefab = "baker", .components = .{ .Position = .{ .x = 600, .y = 300 } } },
-        // Dangling Flour items - will be picked up by workers
+        // Dangling Flour items - first batch registered immediately for pickup
         .{ .prefab = "flour", .components = .{ .Position = .{ .x = 100, .y = 150 }, .DanglingItem = .{ .item_type = .Flour } } },
         .{ .prefab = "flour", .components = .{ .Position = .{ .x = 130, .y = 150 }, .DanglingItem = .{ .item_type = .Flour } } },
         .{ .prefab = "flour", .components = .{ .Position = .{ .x = 160, .y = 150 }, .DanglingItem = .{ .item_type = .Flour } } },
-        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 190, .y = 150 }, .DanglingItem = .{ .item_type = .Flour } } },
-        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 100, .y = 120 }, .DanglingItem = .{ .item_type = .Flour } } },
-        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 130, .y = 120 }, .DanglingItem = .{ .item_type = .Flour } } },
-        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 160, .y = 120 }, .DanglingItem = .{ .item_type = .Flour } } },
-        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 190, .y = 120 }, .DanglingItem = .{ .item_type = .Flour } } },
-        // Dangling Water item
-        .{
-            .prefab = "water",
-            .components = .{
-                .Position = .{ .x = 250, .y = 150 },
-                .DanglingItem = .{ .item_type = .Water },
-            },
-        },
+        // Queued flour - visible but registered as dangling dynamically by task_initializer
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 190, .y = 150 } } },
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 100, .y = 120 } } },
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 130, .y = 120 } } },
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 160, .y = 120 } } },
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 190, .y = 120 } } },
         // Label for dangling item
         .{
             .components = .{
