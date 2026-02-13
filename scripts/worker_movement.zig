@@ -429,10 +429,13 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     // Get the EIS destination
                     const eis_id = eos_transport.worker_transport_to.get(worker_id) orelse {
                         std.log.warn("[WorkerMovement] transport_pickup: no EIS destination for worker {d}", .{worker_id});
-                        // Clean up tracking
+                        // Clean up tracking and undo unavailability
                         _ = eos_transport.worker_transport_from.remove(worker_id);
                         _ = eos_transport.pending_transports.remove(eos_id);
+                        _ = task_hooks.worker_carried_items.remove(worker_id);
+                        game.hierarchy.removeParent(engine.entityFromU64(item_id));
                         registry.remove(MovementTarget, entity);
+                        _ = Context.workerAvailable(worker_id);
                         break;
                     };
 
@@ -440,10 +443,14 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     const eis_entity = engine.entityFromU64(eis_id);
                     const eis_pos = registry.tryGet(Position, eis_entity) orelse {
                         std.log.warn("[WorkerMovement] transport_pickup: EIS {d} has no Position", .{eis_id});
+                        // Clean up tracking and undo unavailability
                         _ = eos_transport.worker_transport_from.remove(worker_id);
                         _ = eos_transport.worker_transport_to.remove(worker_id);
                         _ = eos_transport.pending_transports.remove(eos_id);
+                        _ = task_hooks.worker_carried_items.remove(worker_id);
+                        game.hierarchy.removeParent(engine.entityFromU64(item_id));
                         registry.remove(MovementTarget, entity);
+                        _ = Context.workerAvailable(worker_id);
                         break;
                     };
 
@@ -466,20 +473,28 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     // Get the item the worker is carrying
                     const item_id = task_hooks.worker_carried_items.get(worker_id) orelse {
                         std.log.warn("[WorkerMovement] transport_deliver: worker {d} not carrying any item", .{worker_id});
-                        // Clean up tracking
+                        // Clean up tracking and restore availability
                         if (eos_transport.worker_transport_from.get(worker_id)) |eos_id| {
                             _ = eos_transport.pending_transports.remove(eos_id);
                         }
                         _ = eos_transport.worker_transport_from.remove(worker_id);
                         _ = eos_transport.worker_transport_to.remove(worker_id);
                         registry.remove(MovementTarget, entity);
+                        _ = Context.workerAvailable(worker_id);
                         break;
                     };
 
                     // Get the EIS destination
                     const eis_id = eos_transport.worker_transport_to.get(worker_id) orelse {
                         std.log.warn("[WorkerMovement] transport_deliver: no EIS tracked for worker {d}", .{worker_id});
+                        // Clean up and restore availability
+                        _ = task_hooks.worker_carried_items.remove(worker_id);
+                        if (eos_transport.worker_transport_from.get(worker_id)) |eos_id| {
+                            _ = eos_transport.pending_transports.remove(eos_id);
+                        }
+                        _ = eos_transport.worker_transport_from.remove(worker_id);
                         registry.remove(MovementTarget, entity);
+                        _ = Context.workerAvailable(worker_id);
                         break;
                     };
 
@@ -487,7 +502,16 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     const eis_entity = engine.entityFromU64(eis_id);
                     const eis_pos = registry.tryGet(Position, eis_entity) orelse {
                         std.log.warn("[WorkerMovement] transport_deliver: EIS {d} has no Position", .{eis_id});
+                        // Clean up and restore availability
+                        _ = task_hooks.worker_carried_items.remove(worker_id);
+                        if (eos_transport.worker_transport_from.get(worker_id)) |from_eos_id| {
+                            _ = eos_transport.pending_transports.remove(from_eos_id);
+                        }
+                        _ = eos_transport.worker_transport_from.remove(worker_id);
+                        _ = eos_transport.worker_transport_to.remove(worker_id);
+                        game.hierarchy.removeParent(item_entity);
                         registry.remove(MovementTarget, entity);
+                        _ = Context.workerAvailable(worker_id);
                         break;
                     };
 
@@ -668,7 +692,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     if (new_target.target_x == old_target_x and new_target.target_y == old_target_y) {
                         // Same target position - check if this is a pickup action
                         // If worker is already at pickup location, immediately complete the pickup
-                        if (new_target.action == .pickup or new_target.action == .transport_pickup) {
+                        if (new_target.action == .pickup or new_target.action == .pickup_dangling or new_target.action == .transport_pickup) {
                             std.log.info("[WorkerMovement] Worker already at pickup location, completing pickup immediately", .{});
                             registry.remove(MovementTarget, entity);
                             _ = Context.pickupCompleted(worker_id);
