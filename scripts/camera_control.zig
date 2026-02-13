@@ -81,8 +81,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
     // G - Toggle gizmos
     if (input.isKeyPressed(.g)) {
-        const enabled = game.areGizmosEnabled();
-        game.setGizmosEnabled(!enabled);
+        const enabled = game.gizmos.areEnabled();
+        game.gizmos.setEnabled(!enabled);
         std.log.info("[CameraControl] Gizmos {s}", .{if (!enabled) "enabled" else "disabled"});
     }
 

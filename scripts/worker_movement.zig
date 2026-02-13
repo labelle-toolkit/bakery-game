@@ -92,10 +92,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                             // The component will be removed when the delivery completes.
 
                             // Attach item to worker (parent/child relationship)
-                            game.setParent(item_entity, entity) catch |err| {
+                            game.hierarchy.setParent(item_entity, entity) catch |err| {
                                 std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
                             };
-                            game.setLocalPositionXY(item_entity, 0, 10);
+                            game.pos.setLocalPositionXY(item_entity, 0, 10);
                             std.log.info("[WorkerMovement] Attached item {d} to worker {d} (parent/child)", .{ item_id, worker_id });
 
                             // Track the item for delivery completion
@@ -133,7 +133,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                         const item_entity = engine.entityFromU64(item_id);
 
                         // Detach item from worker
-                        game.removeParent(item_entity);
+                        game.hierarchy.removeParent(item_entity);
 
                         // Position item at storage location
                         // Find the storage entity at this location
@@ -156,7 +156,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
                             if (is_target_storage) {
                                 // Place item at storage position
-                                game.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
+                                game.pos.setWorldPositionXY(item_entity, storage_pos.x, storage_pos.y);
 
                                 const storage_id = engine.entityToU64(storage_entity);
 
@@ -224,10 +224,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     const item_entity = engine.entityFromU64(item_id);
 
                     // Attach item to worker (parent/child relationship)
-                    game.setParent(item_entity, entity) catch |err| {
+                    game.hierarchy.setParent(item_entity, entity) catch |err| {
                         std.log.err("[WorkerMovement] Failed to attach item to worker: {}", .{err});
                     };
-                    game.setLocalPositionXY(item_entity, 0, 10);
+                    game.pos.setLocalPositionXY(item_entity, 0, 10);
 
                     // Track that worker is carrying this item
                     task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
@@ -333,8 +333,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     };
 
                     // Detach item from worker and place at IIS
-                    game.removeParent(item_entity);
-                    game.setWorldPositionXY(item_entity, iis_pos.x, iis_pos.y);
+                    game.hierarchy.removeParent(item_entity);
+                    game.pos.setWorldPositionXY(item_entity, iis_pos.x, iis_pos.y);
 
                     // Track item at IIS storage
                     task_hooks.storage_items.put(iis_id, item_id) catch {};
@@ -405,10 +405,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     const item_entity = engine.entityFromU64(item_id);
 
                     // Attach item to worker (parent/child relationship)
-                    game.setParent(item_entity, entity) catch |err| {
+                    game.hierarchy.setParent(item_entity, entity) catch |err| {
                         std.log.err("[WorkerMovement] transport_pickup: failed to attach item to worker: {}", .{err});
                     };
-                    game.setLocalPositionXY(item_entity, 0, 10);
+                    game.pos.setLocalPositionXY(item_entity, 0, 10);
 
                     // Track that worker is carrying this item
                     task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
@@ -492,8 +492,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     };
 
                     // Detach item from worker and place at EIS
-                    game.removeParent(item_entity);
-                    game.setWorldPositionXY(item_entity, eis_pos.x, eis_pos.y);
+                    game.hierarchy.removeParent(item_entity);
+                    game.pos.setWorldPositionXY(item_entity, eis_pos.x, eis_pos.y);
 
                     // Track item at EIS storage
                     task_hooks.storage_items.put(eis_id, item_id) catch {};
@@ -565,10 +565,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                             const item_entity = engine.entityFromU64(item_id);
 
                             // Attach bread to worker
-                            game.setParent(item_entity, entity) catch |err| {
+                            game.hierarchy.setParent(item_entity, entity) catch |err| {
                                 std.log.err("[WorkerMovement] pickup_from_ios: failed to attach item: {}", .{err});
                             };
-                            game.setLocalPositionXY(item_entity, 0, 10);
+                            game.pos.setLocalPositionXY(item_entity, 0, 10);
 
                             // Track that worker is carrying this item
                             task_hooks.worker_carried_items.put(worker_id, item_id) catch {};
@@ -682,7 +682,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             const move_dist = @min(target.speed * dt, dist);
             const move_x = (dx / dist) * move_dist;
             const move_y = (dy / dist) * move_dist;
-            game.moveLocalPosition(entity, move_x, move_y);
+            game.pos.moveLocalPosition(entity, move_x, move_y);
 
             // Debug: log worker and carried item positions every ~60 frames
             const worker_id = engine.entityToU64(entity);
