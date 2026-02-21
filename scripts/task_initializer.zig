@@ -1,26 +1,32 @@
 // Task initializer script
 //
-// Initializes the task engine with workers and dangling items on scene load.
-// This script:
-// 1. Notifies the engine about all idle workers so they can be assigned tasks
-// 2. Manually assigns dangling item pickup tasks to idle workers (dangling items
-//    are not managed by the task engine, so we handle them here)
+// Initializes the task engine with workers on scene load.
+// Manages a queue of dangling items to ensure workers are assigned to both
+// dangling pickups AND workstation tasks in parallel (the task engine
+// prioritizes dangling items over workstations, so we limit how many are
+// registered at once).
 
 const std = @import("std");
 const engine = @import("labelle-engine");
 const main = @import("../main.zig");
-const movement_target_mod = @import("../components/movement_target.zig");
-const task_hooks = @import("../hooks/task_hooks.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
+const Entity = engine.Entity;
 const Position = engine.render.Position;
-const Context = main.labelle_tasksContext;
+const Shape = engine.render.Shape;
 const BoundTypes = main.labelle_tasksBindItems;
 const Worker = BoundTypes.Worker;
 const DanglingItem = BoundTypes.DanglingItem;
-const Storage = BoundTypes.Storage;
-const MovementTarget = movement_target_mod.MovementTarget;
+
+/// Max concurrent dangling item pickups. Keep below worker count so
+/// remaining workers can be assigned to workstations.
+const max_concurrent_dangling: usize = 3;
+
+/// Queue of flour entities waiting to be registered as dangling items.
+var queued_entities: [16]Entity = undefined;
+var queued_count: usize = 0;
+var next_queue_idx: usize = 0;
 
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
@@ -29,87 +35,43 @@ pub fn init(game: *Game, scene: *Scene) void {
 
     const registry = game.getRegistry();
 
-    // 1. Register and notify engine about all workers
+    // Count workers
     var worker_view = registry.view(.{Worker});
     var worker_iter = worker_view.entityIterator();
-
     var worker_count: u32 = 0;
-    while (worker_iter.next()) |entity| {
-        const worker_id = engine.entityToU64(entity);
-        _ = Context.workerAvailable(worker_id);
+    while (worker_iter.next()) |_| {
         worker_count += 1;
-        std.log.info("[TaskInitializer] Registered worker {d} with task engine", .{worker_id});
     }
+    std.log.info("[TaskInitializer] Found {d} workers (registered via onAdd callbacks)", .{worker_count});
 
-    std.log.info("[TaskInitializer] Initialized {d} workers for task engine", .{worker_count});
+    // Find flour entities without DanglingItem component (queued for later registration).
+    // These are entities with the flour Shape (20x20 rectangle, color 255,255,200) but
+    // no DanglingItem - they're visible on screen but not yet tracked by the task engine.
+    queued_count = 0;
+    var shape_view = registry.view(.{ Shape, Position });
+    var shape_iter = shape_view.entityIterator();
+    while (shape_iter.next()) |entity| {
+        if (queued_count >= queued_entities.len) break;
 
-    // 2. Manually assign dangling item pickups to idle workers
-    // (Dangling items are not managed by task engine, we handle them manually)
-    // Only assign ONE item per worker - remaining items will be assigned after delivery
-    var dangling_view = registry.view(.{ DanglingItem, Position });
-    var dangling_iter = dangling_view.entityIterator();
+        // Skip entities that already have DanglingItem (already registered)
+        if (registry.tryGet(DanglingItem, entity) != null) continue;
 
-    var assigned_pickups: u32 = 0;
-    while (dangling_iter.next()) |dangling_entity| {
-        const dangling_item = dangling_view.get(DanglingItem, dangling_entity);
-        const dangling_pos = dangling_view.get(Position, dangling_entity);
-        const dangling_id = engine.entityToU64(dangling_entity);
-
-        // Find matching EIS that accepts this item type
-        var storage_view = registry.view(.{ Storage, Position });
-        var storage_iter = storage_view.entityIterator();
-
-        while (storage_iter.next()) |storage_entity| {
-            const storage = storage_view.get(Storage, storage_entity);
-
-            // Only assign to EIS storages that accept this item type
-            if (storage.role != .eis or storage.accepts != dangling_item.item_type) {
-                continue;
+        // Check if this looks like a flour entity (matching prefab shape)
+        const shape = shape_view.get(Shape, entity);
+        if (shape.color.r == 255 and shape.color.g == 255 and shape.color.b == 200) {
+            switch (shape.shape) {
+                .rectangle => |rect| {
+                    if (rect.width == 20 and rect.height == 20) {
+                        queued_entities[queued_count] = entity;
+                        queued_count += 1;
+                    }
+                },
+                else => {},
             }
-
-            const storage_id = engine.entityToU64(storage_entity);
-
-            // Find an available worker that doesn't already have a MovementTarget
-            worker_iter = worker_view.entityIterator();
-            var found_worker = false;
-            while (worker_iter.next()) |worker_entity| {
-                const worker_id = engine.entityToU64(worker_entity);
-
-                // Skip workers that already have an assignment (check for MovementTarget)
-                if (registry.tryGet(MovementTarget, worker_entity) != null) {
-                    std.log.info("[TaskInitializer] Skipping worker {d} - already has MovementTarget", .{worker_id});
-                    continue;
-                }
-
-                // Assign worker to pick up this dangling item
-                registry.set(worker_entity, MovementTarget{
-                    .target_x = dangling_pos.x,
-                    .target_y = dangling_pos.y,
-                    .action = .pickup_dangling,
-                });
-
-                // Track the item the worker will pick up (needed for delivery)
-                task_hooks.ensureWorkerItemsInit();
-                task_hooks.worker_carried_items.put(worker_id, dangling_id) catch {};
-                // Track which EIS this item should be delivered to
-                task_hooks.dangling_item_targets.put(dangling_id, storage_id) catch {};
-
-                std.log.info("[TaskInitializer] Assigned worker {d} to pick up dangling item {d} ({s}) and deliver to EIS {d}", .{
-                    worker_id,
-                    dangling_id,
-                    @tagName(dangling_item.item_type),
-                    storage_id,
-                });
-
-                assigned_pickups += 1;
-                found_worker = true;
-                break;
-            }
-            if (found_worker) break;
         }
     }
 
-    std.log.info("[TaskInitializer] Assigned {d} dangling item pickups", .{assigned_pickups});
+    std.log.info("[TaskInitializer] Queued {d} flour entities for deferred dangling registration", .{queued_count});
 }
 
 pub fn deinit() void {
@@ -117,7 +79,30 @@ pub fn deinit() void {
 }
 
 pub fn update(game: *Game, scene: *Scene, dt: f32) void {
-    _ = game;
     _ = scene;
     _ = dt;
+
+    if (next_queue_idx >= queued_count) return;
+
+    const registry = game.getRegistry();
+
+    // Count currently registered dangling items (DanglingItem is removed on pickup)
+    var dangling_count: usize = 0;
+    var di_view = registry.view(.{DanglingItem});
+    var di_iter = di_view.entityIterator();
+    while (di_iter.next()) |_| {
+        dangling_count += 1;
+    }
+
+    // Only register more items when current count drops below the limit
+    if (dangling_count < max_concurrent_dangling) {
+        const entity = queued_entities[next_queue_idx];
+        next_queue_idx += 1;
+
+        // Adding DanglingItem triggers onAdd callback which registers with the task engine
+        registry.set(entity, DanglingItem{ .item_type = .Flour });
+        std.log.info("[TaskInitializer] Registered queued flour entity as dangling ({d} active, queue {d}/{d})", .{
+            dangling_count + 1, next_queue_idx, queued_count,
+        });
+    }
 }
