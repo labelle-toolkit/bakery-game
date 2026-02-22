@@ -45,6 +45,10 @@ pub var worker_workstation: std.AutoHashMap(u64, u64) = undefined;
 pub var worker_store_target: std.AutoHashMap(u64, u64) = undefined;
 /// Track workers that need to move to workstation before starting work (worker_id -> true)
 pub var worker_pending_arrival: std.AutoHashMap(u64, bool) = undefined;
+/// Track engine-driven transport source (worker_id -> from_storage_id)
+pub var worker_transport_from: std.AutoHashMap(u64, u64) = undefined;
+/// Track engine-driven transport destination (worker_id -> to_storage_id)
+pub var worker_transport_to: std.AutoHashMap(u64, u64) = undefined;
 var worker_items_initialized: bool = false;
 
 pub fn ensureWorkerItemsInit() void {
@@ -57,6 +61,8 @@ pub fn ensureWorkerItemsInit() void {
         worker_workstation = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         worker_store_target = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         worker_pending_arrival = std.AutoHashMap(u64, bool).init(std.heap.c_allocator);
+        worker_transport_from = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
+        worker_transport_to = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
         worker_items_initialized = true;
     }
 }
@@ -339,8 +345,14 @@ pub const GameHooks = struct {
         });
     }
 
-    /// Handle worker starting transport from EOS to EIS.
+    /// Handle worker starting transport from EOS to destination (EIS or standalone).
     pub fn transport_started(payload: anytype) void {
+        ensureWorkerItemsInit();
+
+        // Track transport source and destination for worker_movement handlers
+        worker_transport_from.put(payload.worker_id, payload.from_storage_id) catch {};
+        worker_transport_to.put(payload.worker_id, payload.to_storage_id) catch {};
+
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 
@@ -359,6 +371,59 @@ pub const GameHooks = struct {
             payload.from_storage_id,
             payload.to_storage_id,
             @tagName(payload.item),
+        });
+    }
+
+    /// Handle transport being rerouted to a new destination mid-flight.
+    pub fn transport_rerouted(payload: anytype) void {
+        ensureWorkerItemsInit();
+
+        // Update destination tracking
+        worker_transport_to.put(payload.worker_id, payload.to_storage_id) catch {};
+
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        // Redirect worker to new destination
+        const dest_entity = engine.entityFromU64(payload.to_storage_id);
+        const dest_pos = registry.tryGet(Position, dest_entity) orelse return;
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, MovementTarget{
+            .target_x = dest_pos.x,
+            .target_y = dest_pos.y,
+            .action = .transport_deliver,
+        });
+
+        log.info("transport_rerouted: worker={d} new_dest={d} item={s}", .{
+            payload.worker_id,
+            payload.to_storage_id,
+            @tagName(payload.item),
+        });
+    }
+
+    /// Handle transport being cancelled.
+    pub fn transport_cancelled(payload: anytype) void {
+        ensureWorkerItemsInit();
+
+        // Clean up tracking maps
+        _ = worker_transport_from.remove(payload.worker_id);
+        _ = worker_transport_to.remove(payload.worker_id);
+        _ = worker_carried_items.remove(payload.worker_id);
+
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        // Remove movement target so worker stops (if it has one)
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        if (registry.tryGet(MovementTarget, worker_entity) != null) {
+            registry.remove(MovementTarget, worker_entity);
+        }
+
+        log.info("transport_cancelled: worker={d} from={d} to={d}", .{
+            payload.worker_id,
+            payload.from_storage_id,
+            payload.to_storage_id,
         });
     }
 

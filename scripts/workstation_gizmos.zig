@@ -60,6 +60,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     .iis => Color{ .r = 150, .g = 220, .b = 150, .a = 255 }, // light green
                     .ios => Color{ .r = 220, .g = 180, .b = 100, .a = 255 }, // orange for output
                     .eos => Color{ .r = 200, .g = 140, .b = 80, .a = 255 }, // brown
+                    .standalone => continue, // standalone storages aren't connected to workstations
                 };
 
                 if (!gizmo_drawn) {

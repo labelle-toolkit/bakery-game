@@ -62,6 +62,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     var iis_count: u32 = 0;
     var ios_count: u32 = 0;
     var eos_count: u32 = 0;
+    var standalone_count: u32 = 0;
     {
         var view = registry.view(.{Storage});
         var iter = view.entityIterator();
@@ -86,12 +87,16 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     eos_count += 1;
                     std.log.warn("[StorageInspector] EOS entity={any}", .{entity});
                 },
+                .standalone => {
+                    standalone_count += 1;
+                    std.log.warn("[StorageInspector] Standalone entity={any}, accepts={any}", .{ entity, storage.accepts });
+                },
             }
         }
     }
 
     std.log.warn("[StorageInspector] Total workstations: {d}", .{workstation_count});
-    std.log.warn("[StorageInspector] Total storages - EIS:{d}, IIS:{d}, IOS:{d}, EOS:{d}", .{ eis_count, iis_count, ios_count, eos_count });
+    std.log.warn("[StorageInspector] Total storages - EIS:{d}, IIS:{d}, IOS:{d}, EOS:{d}, Standalone:{d}", .{ eis_count, iis_count, ios_count, eos_count, standalone_count });
 
     // Validate task engine integration (disabled - introspection API not available)
     std.log.info("[StorageInspector] PASS: Task engine is assumed to be initialized", .{});

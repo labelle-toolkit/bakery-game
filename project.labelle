@@ -24,7 +24,7 @@
     .plugins = .{
         .{
             .name = "labelle-tasks",
-            .version = "0.17.0",
+            .version = "0.18.1",
             .bind = .{
                 .{ .func = "bind", .arg = "Items", .components = "Storage,Worker,DanglingItem,Workstation" },
             },

@@ -4,7 +4,6 @@
         "task_initializer",
         "storage_inspector",
         "worker_movement",
-        "eos_transport",
         "camera_control",
         "work_processor",
         "workstation_gizmos",
@@ -59,36 +58,136 @@
                 },
             },
         },
-        // Oven Workstation (includes all storages: 2 EIS, 2 IIS, 1 IOS, 1 EOS)
+        // Oven Workstation (includes all storages: 2 EIS, 2 IIS, 1 IOS, 4 EOS)
         .{ .prefab = "oven" },
         // Water Well - Producer workstation (no EIS/IIS, just IOS and 4 EOS)
         .{ .prefab = "water_well" },
-        // IOS - Bread storage (internal output for oven - commented out)
-        // .{
-        //     .components = .{
-        //         .Storage = .{
-        //             .role = .ios,
-        //         },
-        //     },
-        // },
-        // Shelf - visual representation
+        // Bread Shelf - visual background
         .{
             .components = .{
-                .Position = .{ .x = 600, .y = 450 },
+                .Position = .{ .x = 605, .y = 450 },
                 .Shape = .{
-                    .shape = .{ .rectangle = .{ .width = 80, .height = 40 } },
+                    .shape = .{ .rectangle = .{ .width = 160, .height = 50 } },
                     .color = .{ .r = 160, .g = 120, .b = 80, .a = 255 },
                 },
             },
         },
-        // EOS - Bread storage (external output to shelf - commented out)
-        // .{
-        //     .components = .{
-        //         .Storage = .{
-        //             .role = .eos,
-        //         },
-        //     },
-        // },
+        // Standalone Bread Shelves (4x)
+        .{
+            .components = .{
+                .Position = .{ .x = 560, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Bread },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-B", .size = 10, .y = 25, .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 590, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Bread },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-B", .size = 10, .y = 25, .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 620, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Bread },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-B", .size = 10, .y = 25, .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 650, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Bread },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-B", .size = 10, .y = 25, .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 } },
+            },
+        },
+        // Water Tank - visual background
+        .{
+            .components = .{
+                .Position = .{ .x = 305, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 160, .height = 50 } },
+                    .color = .{ .r = 40, .g = 80, .b = 140, .a = 255 },
+                },
+            },
+        },
+        // Standalone Water Tanks (4x)
+        .{
+            .components = .{
+                .Position = .{ .x = 260, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Water },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-W", .size = 10, .y = 25, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 290, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Water },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-W", .size = 10, .y = 25, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 320, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Water },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-W", .size = 10, .y = 25, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 350, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Water },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-W", .size = 10, .y = 25, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
+            },
+        },
         // Labels
         .{
             .components = .{
@@ -116,14 +215,20 @@
         },
         .{
             .components = .{
-                .Position = .{ .x = 600, .y = 500 },
-                .Text = .{ .text = "Shelf (EOS)", .size = 16, .color = .{ .r = 200, .g = 200, .b = 200, .a = 255 } },
+                .Position = .{ .x = 605, .y = 500 },
+                .Text = .{ .text = "Bread Shelf", .size = 16, .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 305, .y = 500 },
+                .Text = .{ .text = "Water Tank", .size = 16, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
             },
         },
         .{
             .components = .{
                 .Position = .{ .x = 400, .y = 650 },
-                .Text = .{ .text = "Bakery - EIS/IIS/IOS/EOS Task Engine", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                .Text = .{ .text = "Bakery - Standalone Storages Demo", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
             },
         },
     },
