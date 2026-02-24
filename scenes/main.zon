@@ -2,6 +2,7 @@
     .name = "main",
     .scripts = .{
         "task_initializer",
+        "needs_manager",
         "storage_inspector",
         "worker_movement",
         "camera_control",
@@ -223,6 +224,34 @@
             .components = .{
                 .Position = .{ .x = 305, .y = 500 },
                 .Text = .{ .text = "Water Tank", .size = 16, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
+            },
+        },
+        // Bed facilities for Sleep need
+        .{
+            .components = .{
+                .Position = .{ .x = 200, .y = 550 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 40, .height = 25 } },
+                    .color = .{ .r = 80, .g = 80, .b = 200, .a = 255 },
+                },
+                .Bed = .{ .capacity = 1 },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 300, .y = 550 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 40, .height = 25 } },
+                    .color = .{ .r = 80, .g = 80, .b = 200, .a = 255 },
+                },
+                .Bed = .{ .capacity = 1 },
+            },
+        },
+        // Bed area label
+        .{
+            .components = .{
+                .Position = .{ .x = 250, .y = 580 },
+                .Text = .{ .text = "Beds (Sleep)", .size = 16, .color = .{ .r = 80, .g = 80, .b = 200, .a = 255 } },
             },
         },
         .{

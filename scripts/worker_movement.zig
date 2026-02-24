@@ -601,6 +601,14 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                         _ = Context.storeCompleted(worker_id);
                     }
                 },
+                .seek_bed => {
+                    // Worker arrived at bed facility for sleep
+                    const needs_manager = @import("needs_manager.zig");
+                    if (needs_manager.getEngine()) |eng| {
+                        _ = eng.handle(.{ .facility_reached = .{ .worker_id = worker_id } });
+                    }
+                    std.log.info("[WorkerMovement] seek_bed: worker {d} arrived at bed", .{worker_id});
+                },
                 .arrive_at_workstation => {
                     // Worker arrived at workstation to start work
                     std.log.info("[WorkerMovement] arrive_at_workstation: worker {d} arrived", .{worker_id});
@@ -630,7 +638,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
             // Skip target comparison for actions that manually remove MovementTarget
             // Note: .pickup now sets a new target to IIS, so it should NOT skip the check
-            const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .transport_deliver or old_action == .pickup_from_ios);
+            const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .transport_deliver or old_action == .pickup_from_ios or old_action == .seek_bed);
 
             // Only remove MovementTarget if no new target was set by hooks
             if (!skip_target_check) {

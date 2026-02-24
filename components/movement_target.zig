@@ -14,6 +14,7 @@ pub const Action = enum {
     transport_deliver, // Worker delivering item from EOS to EIS
     deliver_to_iis, // Worker delivering item from EIS to IIS
     pickup_from_ios, // Worker picking up output item from IOS
+    seek_bed, // Worker moving to bed facility for sleep need
 };
 
 /// Component that directs a worker to move towards a target position
