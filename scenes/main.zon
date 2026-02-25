@@ -8,6 +8,7 @@
         "camera_control",
         "work_processor",
         "workstation_gizmos",
+        "scene_menu",
     },
     .entities = .{
         .{ .prefab = "baker", .components = .{ .Position = .{ .x = 400, .y = 300 } } },

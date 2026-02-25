@@ -608,6 +608,8 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                         _ = eng.handle(.{ .facility_reached = .{ .worker_id = worker_id } });
                     }
                     std.log.info("[WorkerMovement] seek_bed: worker {d} arrived at bed", .{worker_id});
+                    // Remove MovementTarget so we don't re-trigger arrival every frame
+                    registry.remove(MovementTarget, entity);
                 },
                 .arrive_at_workstation => {
                     // Worker arrived at workstation to start work
@@ -638,7 +640,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
             // Skip target comparison for actions that manually remove MovementTarget
             // Note: .pickup now sets a new target to IIS, so it should NOT skip the check
-            const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .transport_deliver or old_action == .pickup_from_ios or old_action == .seek_bed);
+            const skip_target_check = (old_action == .deliver_to_iis or old_action == .transport_pickup or old_action == .transport_deliver or old_action == .pickup_from_ios);
 
             // Only remove MovementTarget if no new target was set by hooks
             if (!skip_target_check) {

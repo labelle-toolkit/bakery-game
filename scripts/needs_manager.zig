@@ -10,6 +10,7 @@ const labelle_needs = @import("labelle-needs");
 const main = @import("../main.zig");
 const movement_target = @import("../components/movement_target.zig");
 const bed_comp = @import("../components/bed.zig");
+const work_progress = @import("../components/work_progress.zig");
 const Facility = labelle_needs.Facility;
 
 const log = std.log.scoped(.needs_manager);
@@ -19,9 +20,11 @@ const Scene = engine.Scene;
 const Position = engine.render.Position;
 const Color = engine.Color;
 const MovementTarget = movement_target.MovementTarget;
+const WorkProgress = work_progress.WorkProgress;
 const BoundTypes = main.labelle_tasksBindItems;
 const Worker = BoundTypes.Worker;
 const Context = main.labelle_tasksContext;
+const task_hooks = @import("../hooks/task_hooks.zig");
 
 // --- Need types ---
 
@@ -36,6 +39,52 @@ pub const NeedsEngine = labelle_needs.Engine(u64, Need, Item, NeedsHooks);
 
 var game_ref: ?*Game = null;
 var needs_engine_ref: ?*NeedsEngine = null;
+
+// --- Public configuration for scene switching ---
+
+/// Set before loading a scene to override the initial sleep value for workers.
+/// null = use default (1.0). Reset to null after use.
+pub var override_initial_sleep: ?f32 = null;
+
+// --- Deferred sleep state ---
+// When a worker is actively working (has WorkProgress) and sleep hits Yellow,
+// we defer the bed-seeking until work completes.
+
+const MAX_WORKERS = 16;
+var pending_sleep_workers: [MAX_WORKERS]u64 = undefined;
+var pending_sleep_facilities: [MAX_WORKERS]u64 = undefined;
+var pending_sleep_count: usize = 0;
+
+fn storePendingSleep(worker_id: u64, facility_id: u64) void {
+    // Check if already pending
+    for (pending_sleep_workers[0..pending_sleep_count]) |id| {
+        if (id == worker_id) return;
+    }
+    if (pending_sleep_count < MAX_WORKERS) {
+        pending_sleep_workers[pending_sleep_count] = worker_id;
+        pending_sleep_facilities[pending_sleep_count] = facility_id;
+        pending_sleep_count += 1;
+        log.info("Deferred sleep for worker {d} (working, will seek bed {d} after)", .{ worker_id, facility_id });
+    }
+}
+
+fn removePendingSleep(worker_id: u64) void {
+    for (0..pending_sleep_count) |i| {
+        if (pending_sleep_workers[i] == worker_id) {
+            // Swap-remove
+            pending_sleep_count -= 1;
+            if (i < pending_sleep_count) {
+                pending_sleep_workers[i] = pending_sleep_workers[pending_sleep_count];
+                pending_sleep_facilities[i] = pending_sleep_facilities[pending_sleep_count];
+            }
+            return;
+        }
+    }
+}
+
+fn clearPendingSleep() void {
+    pending_sleep_count = 0;
+}
 
 // --- Distance function for facility selection ---
 
@@ -54,18 +103,65 @@ fn distanceFn(a: u64, b: u64) f32 {
     return @sqrt(dx * dx + dy * dy);
 }
 
+// --- Helper: drop carried item at worker's current position ---
+
+fn dropCarriedItem(worker_id: u64) void {
+    const game = game_ref orelse return;
+    const registry = game.getRegistry();
+    const worker_entity = engine.entityFromU64(worker_id);
+
+    task_hooks.ensureWorkerItemsInit();
+    const item_id = task_hooks.worker_carried_items.get(worker_id) orelse return;
+    const item_entity = engine.entityFromU64(item_id);
+
+    // Get worker's current world position before detaching
+    const worker_pos = registry.tryGet(Position, worker_entity) orelse return;
+    const drop_x = worker_pos.x;
+    const drop_y = worker_pos.y;
+
+    // Detach item from worker
+    game.hierarchy.removeParent(item_entity);
+
+    // Place item at worker's world position
+    game.pos.setWorldPositionXY(item_entity, drop_x, drop_y);
+
+    // Clean up tracking
+    _ = task_hooks.worker_carried_items.remove(worker_id);
+
+    log.info("dropCarriedItem: worker {d} dropped item {d} at ({d:.0},{d:.0})", .{
+        worker_id, item_id, drop_x, drop_y,
+    });
+}
+
 // --- Hook implementations ---
 
 const NeedsHooks = struct {
     pub fn seek_facility(payload: anytype) void {
+        const game = game_ref orelse return;
+        const registry = game.getRegistry();
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+
+        // Check if worker is actively working (has WorkProgress component)
+        if (registry.tryGet(WorkProgress, worker_entity) != null) {
+            log.info("seek_facility: worker={d} is WORKING, deferring sleep (bed={d})", .{
+                payload.worker_id,
+                payload.facility_id,
+            });
+            // Defer: store pending sleep, don't set movement target yet
+            storePendingSleep(payload.worker_id, payload.facility_id);
+            // Still mark unavailable for NEW task assignment after current work
+            // (workerUnavailable is called by worker_interrupted hook, not here)
+            return;
+        }
+
         log.info("seek_facility: worker={d} bed={d} need={s}", .{
             payload.worker_id,
             payload.facility_id,
             @tagName(payload.need),
         });
 
-        const game = game_ref orelse return;
-        const registry = game.getRegistry();
+        // Drop any carried item at worker's current position
+        dropCarriedItem(payload.worker_id);
 
         // Look up bed position
         const bed_entity = engine.entityFromU64(payload.facility_id);
@@ -75,7 +171,6 @@ const NeedsHooks = struct {
         };
 
         // Set MovementTarget to move worker to bed
-        const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
             .target_x = bed_pos.x,
             .target_y = bed_pos.y,
@@ -91,6 +186,9 @@ const NeedsHooks = struct {
             payload.worker_id,
             @tagName(payload.need),
         });
+
+        // Drop any carried item at worker's current position
+        dropCarriedItem(payload.worker_id);
 
         // Remove any movement target so worker stays put
         const game = game_ref orelse return;
@@ -114,6 +212,8 @@ const NeedsHooks = struct {
 
     pub fn worker_restored(payload: anytype) void {
         log.info("worker_restored: worker={d}", .{payload.worker_id});
+        // Clear any stale pending sleep entry
+        removePendingSleep(payload.worker_id);
         _ = Context.workerAvailable(payload.worker_id);
     }
 
@@ -162,8 +262,13 @@ const NeedsHooks = struct {
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
     game_ref = game;
+    clearPendingSleep();
 
-    log.info("Initializing needs engine (Sleep only)", .{});
+    // Use override if set, otherwise default to 1.0
+    const initial_sleep = override_initial_sleep orelse 1.0;
+    override_initial_sleep = null; // consume the override
+
+    log.info("Initializing needs engine (Sleep only, initial_value={d:.2})", .{initial_sleep});
 
     // Create needs engine on heap (using c_allocator for WASM compat)
     const eng = std.heap.c_allocator.create(NeedsEngine) catch {
@@ -185,7 +290,7 @@ pub fn init(game: *Game, scene: *Scene) void {
         .facility_restore_value = 1.0,
         .in_place_duration = 5.0, // 5s in-place (penalty)
         .in_place_restore_value = 0.6,
-        .initial_value = 1.0,
+        .initial_value = initial_sleep,
     });
 
     // Register all Worker entities
@@ -230,7 +335,7 @@ pub fn init(game: *Game, scene: *Scene) void {
         bed_count += 1;
     }
 
-    log.info("Needs engine initialized: {d} beds, {d} workers, Sleep configured", .{ bed_count, worker_count });
+    log.info("Needs engine initialized: {d} beds, {d} workers, Sleep configured (initial={d:.2})", .{ bed_count, worker_count, initial_sleep });
 }
 
 pub fn deinit() void {
@@ -240,6 +345,7 @@ pub fn deinit() void {
         needs_engine_ref = null;
     }
     game_ref = null;
+    clearPendingSleep();
     log.info("Needs engine deinitialized", .{});
 }
 
@@ -249,6 +355,46 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
     const eng = needs_engine_ref orelse return;
     eng.tick(dt);
+
+    // Check for deferred sleep: workers whose work just completed
+    if (pending_sleep_count > 0) {
+        const registry = game.getRegistry();
+        // Iterate pending list (copy count since we may modify during iteration)
+        var i: usize = 0;
+        while (i < pending_sleep_count) {
+            const worker_id = pending_sleep_workers[i];
+            const facility_id = pending_sleep_facilities[i];
+            const worker_entity = engine.entityFromU64(worker_id);
+
+            // Check if worker is still working
+            if (registry.tryGet(WorkProgress, worker_entity) != null) {
+                // Still working, keep waiting
+                i += 1;
+                continue;
+            }
+
+            // Work completed! Now send worker to bed
+            log.info("Deferred sleep resolved: worker {d} work done, now seeking bed {d}", .{ worker_id, facility_id });
+
+            const bed_entity = engine.entityFromU64(facility_id);
+            if (registry.tryGet(Position, bed_entity)) |bed_pos| {
+                registry.set(worker_entity, MovementTarget{
+                    .target_x = bed_pos.x,
+                    .target_y = bed_pos.y,
+                    .action = .seek_bed,
+                });
+                _ = Context.workerUnavailable(worker_id);
+            }
+
+            // Remove from pending (swap-remove)
+            pending_sleep_count -= 1;
+            if (i < pending_sleep_count) {
+                pending_sleep_workers[i] = pending_sleep_workers[pending_sleep_count];
+                pending_sleep_facilities[i] = pending_sleep_facilities[pending_sleep_count];
+            }
+            // Don't increment i — the swapped element needs checking too
+        }
+    }
 
     // Draw sleep level bars above workers
     const registry = game.getRegistry();

@@ -1,0 +1,87 @@
+.{
+    .name = "sleep_red_no_beds",
+    .scripts = .{
+        "task_initializer",
+        "needs_manager",
+        "worker_movement",
+        "camera_control",
+        "work_processor",
+        "workstation_gizmos",
+        "eos_transport",
+        "scene_menu",
+    },
+    .entities = .{
+        // Single baker worker
+        .{ .prefab = "baker", .components = .{ .Position = .{ .x = 400, .y = 300 } } },
+        // Dangling Flour items (registered immediately for pickup)
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 100, .y = 150 }, .DanglingItem = .{ .item_type = .Flour } } },
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 130, .y = 150 }, .DanglingItem = .{ .item_type = .Flour } } },
+        .{ .prefab = "flour", .components = .{ .Position = .{ .x = 160, .y = 150 }, .DanglingItem = .{ .item_type = .Flour } } },
+        // Oven Workstation
+        .{ .prefab = "oven" },
+        // Water Well
+        .{ .prefab = "water_well" },
+        // NO BEDS - worker must sleep in place
+        // Standalone Bread Shelves (2x for output)
+        .{
+            .components = .{
+                .Position = .{ .x = 560, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Bread },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-B", .size = 10, .y = 25, .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 590, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Bread },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-B", .size = 10, .y = 25, .color = .{ .r = 210, .g = 160, .b = 90, .a = 255 } },
+            },
+        },
+        // Standalone Water Tanks (2x)
+        .{
+            .components = .{
+                .Position = .{ .x = 260, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Water },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-W", .size = 10, .y = 25, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
+            },
+        },
+        .{
+            .components = .{
+                .Position = .{ .x = 290, .y = 450 },
+                .Shape = .{
+                    .shape = .{ .rectangle = .{ .width = 35, .height = 35, .fill = .outline } },
+                    .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 },
+                },
+                .Storage = .{ .role = .standalone, .accepts = .Water },
+            },
+            .gizmos = .{
+                .Text = .{ .text = "S-W", .size = 10, .y = 25, .color = .{ .r = 60, .g = 130, .b = 200, .a = 255 } },
+            },
+        },
+        // Labels
+        .{
+            .components = .{
+                .Position = .{ .x = 400, .y = 650 },
+                .Text = .{ .text = "Test: Red No Beds (ESC = menu)", .size = 18, .color = .{ .r = 220, .g = 40, .b = 40, .a = 255 } },
+            },
+        },
+    },
+}
