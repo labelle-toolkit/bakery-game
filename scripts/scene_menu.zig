@@ -35,6 +35,42 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     const input = game.getInput();
     const on_menu = isOnMenu(game);
 
+    // Show scene selection buttons on menu
+    if (on_menu) {
+        if (game.gui.button(.{
+            .text = "Yellow While Working",
+            .position = .{ .x = 387, .y = 310 },
+            .size = .{ .width = 250, .height = 35 },
+        })) {
+            log.info("Switching to: sleep_yellow_working", .{});
+            needs_manager.override_initial_sleep = 0.70;
+            game.queueSceneChange("sleep_yellow_working");
+            return;
+        }
+
+        if (game.gui.button(.{
+            .text = "Red No Beds",
+            .position = .{ .x = 387, .y = 400 },
+            .size = .{ .width = 250, .height = 35 },
+        })) {
+            log.info("Switching to: sleep_red_no_beds", .{});
+            needs_manager.override_initial_sleep = 0.25;
+            game.queueSceneChange("sleep_red_no_beds");
+            return;
+        }
+
+        if (game.gui.button(.{
+            .text = "Full Bakery",
+            .position = .{ .x = 387, .y = 490 },
+            .size = .{ .width = 250, .height = 35 },
+        })) {
+            log.info("Switching to: main (full bakery)", .{});
+            needs_manager.override_initial_sleep = null;
+            game.queueSceneChange("main");
+            return;
+        }
+    }
+
     // Show back button on non-menu scenes
     if (!on_menu) {
         if (game.gui.button(.{

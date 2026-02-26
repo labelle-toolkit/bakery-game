@@ -67,6 +67,22 @@ pub fn ensureWorkerItemsInit() void {
     }
 }
 
+/// Clear all game-side tracking maps on scene transition.
+pub fn resetTracking() void {
+    if (!worker_items_initialized) return;
+    worker_carried_items.clearRetainingCapacity();
+    dangling_item_targets.clearRetainingCapacity();
+    storage_items.clearRetainingCapacity();
+    worker_pickup_storage.clearRetainingCapacity();
+    worker_workstation.clearRetainingCapacity();
+    worker_store_target.clearRetainingCapacity();
+    worker_pending_arrival.clearRetainingCapacity();
+    worker_transport_from.clearRetainingCapacity();
+    worker_transport_to.clearRetainingCapacity();
+    GameHooks.delivery_counter = 0;
+    log.info("Game-side tracking maps reset (scene transition)", .{});
+}
+
 /// Game-specific task hooks for labelle-tasks integration.
 /// These handlers respond to task engine events and integrate
 /// with the game's visual/movement systems.

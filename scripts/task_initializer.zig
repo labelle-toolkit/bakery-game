@@ -31,6 +31,14 @@ var next_queue_idx: usize = 0;
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
 
+    // Reset game-side tracking maps from previous scene
+    const task_hooks = @import("../hooks/task_hooks.zig");
+    task_hooks.resetTracking();
+
+    // Reset static state
+    queued_count = 0;
+    next_queue_idx = 0;
+
     std.log.info("[TaskInitializer] Initializing task engine with scene entities", .{});
 
     const registry = game.getRegistry();
