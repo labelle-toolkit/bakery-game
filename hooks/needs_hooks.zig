@@ -167,6 +167,15 @@ pub const NeedsGameHooks = struct {
             payload.worker_id,
             @tagName(payload.need),
         });
+        // If worker has deferred sleep (still working), don't release from
+        // workstation yet — workerUnavailable will be called when the
+        // deferred sleep resolves in needs_manager.update().
+        for (pending_sleep_workers[0..pending_sleep_count]) |id| {
+            if (id == payload.worker_id) {
+                log.info("worker_interrupted: worker={d} has deferred sleep, skipping workerUnavailable", .{payload.worker_id});
+                return;
+            }
+        }
         _ = TaskContext.workerUnavailable(payload.worker_id);
     }
 

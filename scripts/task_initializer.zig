@@ -31,9 +31,9 @@ var next_queue_idx: usize = 0;
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
 
-    // Reset game-side tracking maps from previous scene
-    const task_hooks = @import("../hooks/task_hooks.zig");
-    task_hooks.resetTracking();
+    // Note: game-side tracking maps are reset by scene_before_load hook
+    // (before entity loading), so we must NOT reset here — by this point
+    // the task engine has already assigned workers during scene_load.
 
     // Reset static state
     queued_count = 0;
