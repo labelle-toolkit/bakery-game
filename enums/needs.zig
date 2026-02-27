@@ -2,6 +2,7 @@
 
 pub const NeedType = enum {
     Sleep,
+    Drink,
 };
 
 // Alias for plugin configuration

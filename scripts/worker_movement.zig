@@ -602,13 +602,21 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     }
                 },
                 .seek_bed => {
-                    // Worker arrived at bed facility for sleep
+                    // Worker arrived at bed/fountain facility for need fulfillment
                     const needs_manager = @import("needs_manager.zig");
                     if (needs_manager.getEngine()) |eng| {
                         _ = eng.handle(.{ .facility_reached = .{ .worker_id = worker_id } });
                     }
-                    std.log.info("[WorkerMovement] seek_bed: worker {d} arrived at bed", .{worker_id});
-                    // Remove MovementTarget so we don't re-trigger arrival every frame
+                    std.log.info("[WorkerMovement] seek_bed: worker {d} arrived at facility", .{worker_id});
+                    registry.remove(MovementTarget, entity);
+                },
+                .seek_water => {
+                    // Worker arrived at storage to pick up water for drink need
+                    const needs_manager = @import("needs_manager.zig");
+                    if (needs_manager.getEngine()) |eng| {
+                        _ = eng.handle(.{ .item_picked_up = .{ .worker_id = worker_id } });
+                    }
+                    std.log.info("[WorkerMovement] seek_water: worker {d} picked up water", .{worker_id});
                     registry.remove(MovementTarget, entity);
                 },
                 .arrive_at_workstation => {

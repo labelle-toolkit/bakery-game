@@ -135,6 +135,15 @@ pub const GameHooks = struct {
         const ws_id = worker_workstation.get(payload.worker_id) orelse 0;
         log.info("worker_released: worker={d} workstation={d}", .{ payload.worker_id, ws_id });
         _ = worker_workstation.remove(payload.worker_id);
+
+        // Try EOS→EIS transport before the task engine reassigns this worker.
+        // Without this, the task engine immediately reassigns in tryAssignWorkers
+        // and the EOS transport script's update() never gets a chance.
+        const game: *engine.Game = @ptrCast(@alignCast(payload.game orelse return));
+        const eos_transport = @import("../scripts/eos_transport.zig");
+        if (eos_transport.tryAssignForWorker(payload.worker_id, game)) {
+            log.info("worker_released: worker {d} assigned to EOS transport", .{payload.worker_id});
+        }
     }
 
     /// Handle worker starting movement to workstation (initial assignment).

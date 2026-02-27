@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const engine = @import("labelle-engine");
+const labelle_needs = @import("labelle-needs");
 const main = @import("../main.zig");
 const movement_target = @import("../components/movement_target.zig");
 const task_hooks = @import("../hooks/task_hooks.zig");
@@ -21,6 +22,7 @@ const Context = main.labelle_tasksContext;
 const BoundTypes = main.labelle_tasksBindItems;
 const Storage = BoundTypes.Storage;
 const Worker = BoundTypes.Worker;
+const Locked = labelle_needs.Locked;
 
 /// Track pending transports: eos_id -> eis_id
 pub var pending_transports: std.AutoHashMap(u64, u64) = undefined;
@@ -83,6 +85,17 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     }
 }
 
+/// Try to assign an EOS→EIS transport for a specific worker.
+/// Called from task_hooks.worker_released so EOS transport gets a chance
+/// before the task engine reassigns the worker.
+pub fn tryAssignForWorker(worker_id: u64, game: *Game) bool {
+    ensureInit();
+    task_hooks.ensureWorkerItemsInit();
+    const registry = game.getRegistry();
+    const worker_entity = engine.entityFromU64(worker_id);
+    return tryAssignTransport(registry, worker_entity, worker_id);
+}
+
 /// Try to find an EOS with items that can be transported to a matching EIS
 fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64) bool {
     // Get worker position for distance calculations
@@ -111,6 +124,9 @@ fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64)
 
         // Skip if transport already pending from this EOS
         if (pending_transports.get(eos_id) != null) continue;
+
+        // Skip if locked by drink system (worker is seeking this water)
+        if (registry.tryGet(Locked, eos_entity) != null) continue;
 
         // Get the item type stored here
         const item_type = storage.accepts orelse continue;

@@ -24,20 +24,25 @@
     .plugins = .{
         .{
             .name = "labelle-tasks",
-            .version = "0.20.0",
+            .path = "../labelle-tasks",
             .bind = .{
                 .{ .func = "bind", .arg = "Items", .components = "Storage,Worker,DanglingItem,Workstation" },
             },
             .engine_hooks = .{
                 .create = "createEngineHooks",
-                .task_hooks = "task_hooks.GameHooks",
+                .hooks = "task_hooks.GameHooks",
             },
         },
         .{
             .name = "labelle-needs",
+            .path = "../labelle-needs",
+            .bind = .{
+                .{ .func = "bind", .arg = "Needs", .components = "Locked" },
+            },
             .engine_hooks = .{
                 .create = "createEngineHooks",
-                .needs_hooks = "needs_hooks.NeedsGameHooks",
+                .hooks = "needs_hooks.NeedsGameHooks",
+                .args = .{ "Needs", "Items" },
             },
         },
     },

@@ -13,10 +13,19 @@ const Game = engine.Game;
 const Scene = engine.Scene;
 const gui = engine.gui;
 
+var auto_switch: bool = true;
+
 pub fn init(game: *Game, scene: *Scene) void {
-    _ = game;
     _ = scene;
     log.info("Scene menu script initialized", .{});
+
+    // Auto-switch to first test scene on startup
+    if (auto_switch) {
+        auto_switch = false;
+        log.info("Auto-switching to: sleep_yellow_working", .{});
+        needs_manager.override_initial_sleep = 0.70;
+        game.queueSceneChange("sleep_yellow_working");
+    }
 }
 
 pub fn deinit() void {

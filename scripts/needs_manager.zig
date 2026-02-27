@@ -1,17 +1,19 @@
 // Needs manager script
 //
-// Per-scene setup for the labelle-needs engine: configures Sleep,
-// registers workers and bed facilities, ticks every frame.
+// Per-scene setup for the labelle-needs engine: configures Sleep and Drink,
+// registers workers and facilities, ticks every frame.
 // Engine lifecycle (init/deinit) is handled by createEngineHooks.
 // Hook handlers are in hooks/needs_hooks.zig.
 
 const std = @import("std");
 const engine = @import("labelle-engine");
 const labelle_needs = @import("labelle-needs");
+const labelle_tasks = @import("labelle-tasks");
 const main = @import("../main.zig");
 const movement_target = @import("../components/movement_target.zig");
 const work_progress = @import("../components/work_progress.zig");
 const needs_hooks = @import("../hooks/needs_hooks.zig");
+const task_hooks = @import("../hooks/task_hooks.zig");
 
 const log = std.log.scoped(.needs_manager);
 
@@ -23,10 +25,13 @@ const MovementTarget = movement_target.MovementTarget;
 const WorkProgress = work_progress.WorkProgress;
 const BoundTypes = main.labelle_tasksBindItems;
 const Worker = BoundTypes.Worker;
+const Storage = BoundTypes.Storage;
 const Facility = labelle_needs.Facility;
+const Locked = labelle_needs.Locked;
 const NeedsContext = main.labelle_needsContext;
 const TaskContext = main.labelle_tasksContext;
 const Need = main.Needs;
+const Items = main.Items;
 
 // --- Public configuration for scene switching ---
 
@@ -40,6 +45,98 @@ pub fn getEngine() ?*NeedsContext.Engine {
     return NeedsContext.getEngine();
 }
 
+// --- findWaterSource callback for item-consuming Drink need ---
+
+fn findWaterSource(worker_id: u64, need: Need, level: labelle_needs.NeedLevel) ?NeedsContext.Engine.FindItemSourceResult {
+    _ = level;
+    if (need != .Drink) return null;
+
+    // Access registry via shared pointer
+    const registry = labelle_needs.getSharedRegistry(engine.EngineTypes.Registry) orelse return null;
+
+    task_hooks.ensureWorkerItemsInit();
+
+    // Get worker position for nearest-water selection
+    const worker_entity = engine.entityFromU64(worker_id);
+    const worker_pos = registry.tryGet(Position, worker_entity) orelse return null;
+
+    // Count EOS Water supply vs EIS Water demand to determine surplus.
+    // Only allow drinking from EOS if there's more Water in EOS than
+    // empty EIS slots that need Water (so bread production isn't starved).
+    var eos_water_available: u32 = 0;
+    var eis_water_demand: u32 = 0;
+    {
+        var count_view = registry.view(.{ Storage, Position });
+        var count_iter = count_view.entityIterator();
+        while (count_iter.next()) |se| {
+            const s = count_view.get(Storage, se);
+            const accepts = s.accepts orelse continue;
+            if (accepts != .Water) continue;
+            const sid = engine.entityToU64(se);
+            if (s.role == .eos) {
+                if (task_hooks.storage_items.get(sid) != null and
+                    registry.tryGet(Locked, se) == null)
+                {
+                    eos_water_available += 1;
+                }
+            } else if (s.role == .eis) {
+                if (task_hooks.storage_items.get(sid) == null) {
+                    eis_water_demand += 1;
+                }
+            }
+        }
+    }
+    const allow_eos_drinking = eos_water_available > eis_water_demand;
+
+    // Scan Storage entities for the nearest available Water
+    var storage_view = registry.view(.{ Storage, Position });
+    var iter = storage_view.entityIterator();
+
+    var best_storage_id: ?u64 = null;
+    var best_dist: f32 = std.math.floatMax(f32);
+
+    while (iter.next()) |storage_entity| {
+        const storage = storage_view.get(Storage, storage_entity);
+
+        // Only standalone or EOS storages (water well produces Water to EOS)
+        if (storage.role == .standalone) {
+            // Always allowed
+        } else if (storage.role == .eos) {
+            // Only if there's surplus beyond what EIS needs
+            if (!allow_eos_drinking) continue;
+        } else {
+            continue;
+        }
+
+        // Must accept Water
+        const accepts = storage.accepts orelse continue;
+        if (accepts != .Water) continue;
+
+        const storage_id = engine.entityToU64(storage_entity);
+
+        // Must actually have an item in it
+        if (task_hooks.storage_items.get(storage_id) == null) continue;
+
+        // Skip storages locked by another worker
+        if (registry.tryGet(Locked, storage_entity) != null) continue;
+
+        // Distance to worker
+        const spos = storage_view.get(Position, storage_entity);
+        const dx = spos.x - worker_pos.x;
+        const dy = spos.y - worker_pos.y;
+        const dist = @sqrt(dx * dx + dy * dy);
+        if (dist < best_dist) {
+            best_dist = dist;
+            best_storage_id = storage_id;
+        }
+    }
+
+    if (best_storage_id) |sid| {
+        return .{ .storage_id = sid, .item = .Water };
+    }
+    return null;
+}
+
 // --- Script lifecycle ---
 
 pub fn init(game: *Game, scene: *Scene) void {
@@ -50,10 +147,13 @@ pub fn init(game: *Game, scene: *Scene) void {
     const initial_sleep = override_initial_sleep orelse 1.0;
     override_initial_sleep = null;
 
-    log.info("Initializing needs engine (Sleep only, initial_value={d:.2})", .{initial_sleep});
+    log.info("Initializing needs engine (Sleep+Drink, initial_sleep={d:.2})", .{initial_sleep});
 
     // Set context pointers for enriched payloads and distance function
     NeedsContext.setContext(@ptrCast(game), @ptrCast(game.getRegistry()));
+
+    // Set item source finder for item-consuming needs
+    NeedsContext.setFindItemSourceFn(findWaterSource);
 
     // Configure Sleep need
     NeedsContext.configureNeed(.{
@@ -66,6 +166,20 @@ pub fn init(game: *Game, scene: *Scene) void {
         .in_place_duration = 5.0,
         .in_place_restore_value = 0.6,
         .initial_value = initial_sleep,
+    });
+
+    // Configure Drink need (item-consuming: requires Water from storage)
+    NeedsContext.configureNeed(.{
+        .need = .Drink,
+        .decay_rate = 0.02,
+        .yellow_threshold = 0.5,
+        .red_threshold = 0.2,
+        .facility_duration = 2.0,
+        .facility_restore_value = 1.0,
+        .in_place_duration = 3.0,
+        .in_place_restore_value = 0.8,
+        .initial_value = 1.0,
+        .consumes_item = true,
     });
 
     const registry = game.getRegistry();
@@ -84,10 +198,40 @@ pub fn init(game: *Game, scene: *Scene) void {
     }
     log.info("Registered {d} workers with needs engine", .{worker_count});
 
+    // Seed standalone Water storages with Water items for Drink need
+    task_hooks.ensureWorkerItemsInit();
+    var seed_view = registry.view(.{ Storage, Position });
+    var seed_iter = seed_view.entityIterator();
+    var seeded_count: u32 = 0;
+    while (seed_iter.next()) |storage_entity| {
+        const storage = seed_view.get(Storage, storage_entity);
+        if (storage.role != .standalone) continue;
+        const accepts = storage.accepts orelse continue;
+        if (accepts != .Water) continue;
+
+        const storage_id = engine.entityToU64(storage_entity);
+        const pos = seed_view.get(Position, storage_entity);
+
+        // Create a Water item entity at the storage position
+        const water_entity = registry.createEntity();
+        registry.set(water_entity, Position{ .x = pos.x, .y = pos.y });
+        registry.set(water_entity, engine.render.Shape{
+            .shape = .{ .rectangle = .{ .width = 20, .height = 20 } },
+            .color = .{ .r = 100, .g = 150, .b = 255, .a = 255 },
+        });
+        const water_id = engine.entityToU64(water_entity);
+        task_hooks.storage_items.put(storage_id, water_id) catch {};
+        log.info("Seeded Water item {d} at standalone storage {d} ({d:.0},{d:.0})", .{
+            water_id, storage_id, pos.x, pos.y,
+        });
+        seeded_count += 1;
+    }
+    log.info("Seeded {d} standalone Water storages", .{seeded_count});
+
     // Register all Facility (Bed) entities
     var facility_view = registry.view(.{ Facility, Position });
     var facility_iter = facility_view.entityIterator();
-    var bed_count: u32 = 0;
+    var facility_count: u32 = 0;
     while (facility_iter.next()) |entity| {
         const facility = facility_view.get(Facility, entity);
         const fac_id = engine.entityToU64(entity);
@@ -101,14 +245,14 @@ pub fn init(game: *Game, scene: *Scene) void {
             continue;
         };
         const pos = facility_view.get(Position, entity);
-        log.info("Registered Sleep facility at ({d:.0},{d:.0}) id={d} capacity={d}", .{
-            pos.x, pos.y, fac_id, facility.capacity,
+        log.info("Registered {s} facility at ({d:.0},{d:.0}) id={d} capacity={d}", .{
+            @tagName(need), pos.x, pos.y, fac_id, facility.capacity,
         });
-        bed_count += 1;
+        facility_count += 1;
     }
 
-    log.info("Needs engine initialized: {d} beds, {d} workers, Sleep configured (initial={d:.2})", .{
-        bed_count, worker_count, initial_sleep,
+    log.info("Needs engine initialized: {d} facilities, {d} workers", .{
+        facility_count, worker_count,
     });
 }
 
@@ -133,7 +277,11 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         const facility_id = needs_hooks.getPendingFacility(i);
         const worker_entity = engine.entityFromU64(worker_id);
 
-        if (registry.tryGet(WorkProgress, worker_entity) != null) {
+        // Keep deferring while worker is working OR doing post-work IOS→EOS delivery
+        task_hooks.ensureWorkerItemsInit();
+        if (registry.tryGet(WorkProgress, worker_entity) != null or
+            task_hooks.worker_store_target.get(worker_id) != null)
+        {
             i += 1;
             continue;
         }
@@ -141,48 +289,100 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         log.info("Deferred sleep resolved: worker {d} work done, now seeking bed {d}", .{ worker_id, facility_id });
         const bed_entity = engine.entityFromU64(facility_id);
         if (registry.tryGet(Position, bed_entity)) |bed_pos| {
+            // Call workerUnavailable BEFORE setting MovementTarget, because
+            // workerUnavailable may trigger transport_cancelled which removes MovementTarget
+            _ = TaskContext.workerUnavailable(worker_id);
             registry.set(worker_entity, MovementTarget{
                 .target_x = bed_pos.x,
                 .target_y = bed_pos.y,
                 .action = .seek_bed,
             });
-            _ = TaskContext.workerUnavailable(worker_id);
         }
 
         needs_hooks.removePendingAtIndex(i);
     }
 
-    // Draw sleep level bars above workers
+    // Check for deferred drink: workers whose work just completed
+    var j: usize = 0;
+    while (j < needs_hooks.getDrinkPendingCount()) {
+        const worker_id = needs_hooks.getDrinkPendingWorker(j);
+        const storage_id = needs_hooks.getDrinkPendingStorage(j);
+        const worker_entity = engine.entityFromU64(worker_id);
+
+        // Keep deferring while worker is working OR doing post-work IOS→EOS delivery
+        task_hooks.ensureWorkerItemsInit();
+        if (registry.tryGet(WorkProgress, worker_entity) != null or
+            task_hooks.worker_store_target.get(worker_id) != null)
+        {
+            j += 1;
+            continue;
+        }
+
+        log.info("Deferred drink resolved: worker {d} work done, now seeking water at storage {d}", .{ worker_id, storage_id });
+
+        // Lock storage now (was deferred)
+        const storage_entity = engine.entityFromU64(storage_id);
+        registry.set(storage_entity, Locked{ .locked_by = worker_id });
+        log.info("Deferred drink: locked storage {d} for worker {d}", .{ storage_id, worker_id });
+        if (registry.tryGet(Position, storage_entity)) |storage_pos| {
+            // Call workerUnavailable BEFORE setting MovementTarget, because
+            // workerUnavailable may trigger transport_cancelled which removes MovementTarget
+            _ = TaskContext.workerUnavailable(worker_id);
+            registry.set(worker_entity, MovementTarget{
+                .target_x = storage_pos.x,
+                .target_y = storage_pos.y,
+                .action = .seek_water,
+            });
+        }
+
+        needs_hooks.removeDrinkPendingAtIndex(j);
+    }
+
+    // Draw need level bars above workers
     var worker_view = registry.view(.{ Worker, Position });
     var worker_iter = worker_view.entityIterator();
 
     const bar_width: f32 = 50;
-    const bar_height: f32 = 12;
-    const bar_offset_y: f32 = 30;
+    const bar_height: f32 = 8;
+    const bar_gap: f32 = 2;
+    const bar_offset_y: f32 = 28;
 
     while (worker_iter.next()) |entity| {
         const pos = worker_view.get(Position, entity);
         const worker_id = engine.entityToU64(entity);
 
-        const sleep_val = NeedsContext.getWorkerNeedValue(worker_id, .Sleep) orelse continue;
-
         const bar_x = pos.x - bar_width / 2;
-        const bar_y = pos.y + bar_offset_y;
 
-        // Background (dark gray)
-        game.gizmos.drawRect(bar_x, bar_y, bar_width, bar_height, Color{ .r = 50, .g = 50, .b = 50, .a = 220 });
+        // Drink bar (top, blue-themed)
+        if (NeedsContext.getWorkerNeedValue(worker_id, .Drink)) |drink_val| {
+            const drink_y = pos.y + bar_offset_y;
+            game.gizmos.drawRect(bar_x, drink_y, bar_width, bar_height, Color{ .r = 30, .g = 30, .b = 60, .a = 220 });
+            const fill_w = bar_width * drink_val;
+            const color: Color = if (drink_val > 0.5)
+                Color{ .r = 60, .g = 140, .b = 220, .a = 255 }
+            else if (drink_val > 0.2)
+                Color{ .r = 220, .g = 200, .b = 40, .a = 255 }
+            else
+                Color{ .r = 220, .g = 40, .b = 40, .a = 255 };
+            if (fill_w > 0.5) {
+                game.gizmos.drawRect(bar_x, drink_y, fill_w, bar_height, color);
+            }
+        }
 
-        // Foreground: green → yellow → red based on value
-        const fill_w = bar_width * sleep_val;
-        const color: Color = if (sleep_val > 0.5)
-            Color{ .r = 60, .g = 200, .b = 60, .a = 255 }
-        else if (sleep_val > 0.2)
-            Color{ .r = 220, .g = 200, .b = 40, .a = 255 }
-        else
-            Color{ .r = 220, .g = 40, .b = 40, .a = 255 };
-
-        if (fill_w > 0.5) {
-            game.gizmos.drawRect(bar_x, bar_y, fill_w, bar_height, color);
+        // Sleep bar (bottom, green-themed)
+        if (NeedsContext.getWorkerNeedValue(worker_id, .Sleep)) |sleep_val| {
+            const sleep_y = pos.y + bar_offset_y + bar_height + bar_gap;
+            game.gizmos.drawRect(bar_x, sleep_y, bar_width, bar_height, Color{ .r = 50, .g = 50, .b = 50, .a = 220 });
+            const fill_w = bar_width * sleep_val;
+            const color: Color = if (sleep_val > 0.5)
+                Color{ .r = 60, .g = 200, .b = 60, .a = 255 }
+            else if (sleep_val > 0.2)
+                Color{ .r = 220, .g = 200, .b = 40, .a = 255 }
+            else
+                Color{ .r = 220, .g = 40, .b = 40, .a = 255 };
+            if (fill_w > 0.5) {
+                game.gizmos.drawRect(bar_x, sleep_y, fill_w, bar_height, color);
+            }
         }
     }
 }
