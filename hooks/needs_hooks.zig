@@ -6,6 +6,8 @@
 //
 // Hook payloads are enriched with .registry and .game pointers,
 // so handlers can access the ECS directly.
+//
+// All game-side state is stored in ECS components (no HashMaps or arrays).
 
 const std = @import("std");
 const log = std.log.scoped(.needs_hooks);
@@ -13,7 +15,6 @@ const engine = @import("labelle-engine");
 const labelle_needs = @import("labelle-needs");
 const movement_target = @import("../components/movement_target.zig");
 const work_progress = @import("../components/work_progress.zig");
-const task_hooks = @import("task_hooks.zig");
 const main = @import("../main.zig");
 
 const Locked = labelle_needs.Locked;
@@ -24,117 +25,11 @@ const Position = engine.render.Position;
 const Game = engine.Game;
 const TaskContext = main.labelle_tasksContext;
 
-// --- Deferred sleep state ---
-// When a worker is actively working (has WorkProgress) and sleep hits Yellow,
-// we defer the bed-seeking until work completes.
-
-const MAX_WORKERS = 16;
-var pending_sleep_workers: [MAX_WORKERS]u64 = undefined;
-var pending_sleep_facilities: [MAX_WORKERS]u64 = undefined;
-var pending_sleep_count: usize = 0;
-
-pub fn storePendingSleep(worker_id: u64, facility_id: u64) void {
-    for (pending_sleep_workers[0..pending_sleep_count]) |id| {
-        if (id == worker_id) return;
-    }
-    if (pending_sleep_count < MAX_WORKERS) {
-        pending_sleep_workers[pending_sleep_count] = worker_id;
-        pending_sleep_facilities[pending_sleep_count] = facility_id;
-        pending_sleep_count += 1;
-        log.info("Deferred sleep for worker {d} (working, will seek bed {d} after)", .{ worker_id, facility_id });
-    }
-}
-
-pub fn removePendingSleep(worker_id: u64) void {
-    for (0..pending_sleep_count) |i| {
-        if (pending_sleep_workers[i] == worker_id) {
-            pending_sleep_count -= 1;
-            if (i < pending_sleep_count) {
-                pending_sleep_workers[i] = pending_sleep_workers[pending_sleep_count];
-                pending_sleep_facilities[i] = pending_sleep_facilities[pending_sleep_count];
-            }
-            return;
-        }
-    }
-}
-
-// --- Deferred drink state ---
-// When a worker is actively working (has WorkProgress) and drink hits Yellow,
-// we defer the item-seeking until work completes.
-
-var pending_drink_workers: [MAX_WORKERS]u64 = undefined;
-var pending_drink_storages: [MAX_WORKERS]u64 = undefined;
-var pending_drink_count: usize = 0;
-
-pub fn storePendingDrink(worker_id: u64, storage_id: u64) void {
-    for (pending_drink_workers[0..pending_drink_count]) |id| {
-        if (id == worker_id) return;
-    }
-    if (pending_drink_count < MAX_WORKERS) {
-        pending_drink_workers[pending_drink_count] = worker_id;
-        pending_drink_storages[pending_drink_count] = storage_id;
-        pending_drink_count += 1;
-        log.info("Deferred drink for worker {d} (working, will seek water {d} after)", .{ worker_id, storage_id });
-    }
-}
-
-pub fn removePendingDrink(worker_id: u64) void {
-    for (0..pending_drink_count) |i| {
-        if (pending_drink_workers[i] == worker_id) {
-            pending_drink_count -= 1;
-            if (i < pending_drink_count) {
-                pending_drink_workers[i] = pending_drink_workers[pending_drink_count];
-                pending_drink_storages[i] = pending_drink_storages[pending_drink_count];
-            }
-            return;
-        }
-    }
-}
-
-pub fn getDrinkPendingCount() usize {
-    return pending_drink_count;
-}
-
-pub fn getDrinkPendingWorker(i: usize) u64 {
-    return pending_drink_workers[i];
-}
-
-pub fn getDrinkPendingStorage(i: usize) u64 {
-    return pending_drink_storages[i];
-}
-
-pub fn removeDrinkPendingAtIndex(i: usize) void {
-    pending_drink_count -= 1;
-    if (i < pending_drink_count) {
-        pending_drink_workers[i] = pending_drink_workers[pending_drink_count];
-        pending_drink_storages[i] = pending_drink_storages[pending_drink_count];
-    }
-}
-
-pub fn clearPendingSleep() void {
-    pending_sleep_count = 0;
-    pending_drink_count = 0;
-}
-
-pub fn getPendingCount() usize {
-    return pending_sleep_count;
-}
-
-pub fn getPendingWorker(i: usize) u64 {
-    return pending_sleep_workers[i];
-}
-
-pub fn getPendingFacility(i: usize) u64 {
-    return pending_sleep_facilities[i];
-}
-
-pub fn removePendingAtIndex(i: usize) void {
-    pending_sleep_count -= 1;
-    if (i < pending_sleep_count) {
-        pending_sleep_workers[i] = pending_sleep_workers[pending_sleep_count];
-        pending_sleep_facilities[i] = pending_sleep_facilities[pending_sleep_count];
-    }
-}
+// ECS components for game-side state
+const CarriedItem = main.CarriedItem;
+const StoredItem = main.StoredItem;
+const DeferredSleep = main.DeferredSleep;
+const DeferredDrink = main.DeferredDrink;
 
 // --- Helper: drop carried item at worker's current position ---
 
@@ -142,8 +37,8 @@ fn dropCarriedItem(worker_id: u64, game: *Game) void {
     const registry = game.getRegistry();
     const worker_entity = engine.entityFromU64(worker_id);
 
-    task_hooks.ensureWorkerItemsInit();
-    const item_id = task_hooks.worker_carried_items.get(worker_id) orelse return;
+    const carried = registry.tryGet(CarriedItem, worker_entity) orelse return;
+    const item_id = carried.item_entity;
     const item_entity = engine.entityFromU64(item_id);
 
     const worker_pos = registry.tryGet(Position, worker_entity) orelse return;
@@ -152,7 +47,7 @@ fn dropCarriedItem(worker_id: u64, game: *Game) void {
 
     game.hierarchy.removeParent(item_entity);
     game.pos.setWorldPositionXY(item_entity, drop_x, drop_y);
-    _ = task_hooks.worker_carried_items.remove(worker_id);
+    registry.remove(CarriedItem, worker_entity);
 
     log.info("dropCarriedItem: worker {d} dropped item {d} at ({d:.0},{d:.0})", .{
         worker_id, item_id, drop_x, drop_y,
@@ -173,7 +68,7 @@ pub const NeedsGameHooks = struct {
                 payload.worker_id,
                 payload.facility_id,
             });
-            storePendingSleep(payload.worker_id, payload.facility_id);
+            registry.set(worker_entity, DeferredSleep{ .facility_id = payload.facility_id });
             return;
         }
 
@@ -224,28 +119,44 @@ pub const NeedsGameHooks = struct {
             payload.worker_id,
             @tagName(payload.need),
         });
+
+        const game: *Game = payload.game orelse {
+            _ = TaskContext.workerUnavailable(payload.worker_id);
+            return;
+        };
+        const registry = game.getRegistry();
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+
         // If worker has deferred sleep or drink (still working), don't release from
         // workstation yet — workerUnavailable will be called when the
         // deferred need resolves in needs_manager.update().
-        for (pending_sleep_workers[0..pending_sleep_count]) |id| {
-            if (id == payload.worker_id) {
-                log.info("worker_interrupted: worker={d} has deferred sleep, skipping workerUnavailable", .{payload.worker_id});
-                return;
-            }
+        if (registry.tryGet(DeferredSleep, worker_entity) != null) {
+            log.info("worker_interrupted: worker={d} has deferred sleep, skipping workerUnavailable", .{payload.worker_id});
+            return;
         }
-        for (pending_drink_workers[0..pending_drink_count]) |id| {
-            if (id == payload.worker_id) {
-                log.info("worker_interrupted: worker={d} has deferred drink, skipping workerUnavailable", .{payload.worker_id});
-                return;
-            }
+        if (registry.tryGet(DeferredDrink, worker_entity) != null) {
+            log.info("worker_interrupted: worker={d} has deferred drink, skipping workerUnavailable", .{payload.worker_id});
+            return;
         }
         _ = TaskContext.workerUnavailable(payload.worker_id);
     }
 
     pub fn worker_restored(payload: anytype) void {
         log.info("worker_restored: worker={d}", .{payload.worker_id});
-        removePendingSleep(payload.worker_id);
-        removePendingDrink(payload.worker_id);
+
+        const game: *Game = payload.game orelse {
+            _ = TaskContext.workerAvailable(payload.worker_id);
+            return;
+        };
+        const registry = game.getRegistry();
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+
+        if (registry.tryGet(DeferredSleep, worker_entity) != null) {
+            registry.remove(DeferredSleep, worker_entity);
+        }
+        if (registry.tryGet(DeferredDrink, worker_entity) != null) {
+            registry.remove(DeferredDrink, worker_entity);
+        }
         _ = TaskContext.workerAvailable(payload.worker_id);
     }
 
@@ -300,7 +211,7 @@ pub const NeedsGameHooks = struct {
                 payload.worker_id,
                 payload.storage_id,
             });
-            storePendingDrink(payload.worker_id, payload.storage_id);
+            registry.set(worker_entity, DeferredDrink{ .storage_id = payload.storage_id });
             return;
         }
 
@@ -340,22 +251,23 @@ pub const NeedsGameHooks = struct {
         const registry = game.getRegistry();
         const storage_entity = engine.entityFromU64(payload.storage_id);
 
-        // Unlock storage
-        registry.remove(Locked, storage_entity);
+        // Unlock storage (may already be unlocked)
+        if (registry.tryGet(Locked, storage_entity) != null) {
+            registry.remove(Locked, storage_entity);
+        }
         log.info("item_consumed: unlocked storage {d}", .{payload.storage_id});
 
         // Notify task engine that this storage is now empty
         _ = TaskContext.itemRemoved(payload.storage_id);
         log.info("item_consumed: notified task engine storage {d} is empty", .{payload.storage_id});
 
-        // Despawn the consumed item entity (still tracked in storage_items)
-        task_hooks.ensureWorkerItemsInit();
-        if (task_hooks.storage_items.get(payload.storage_id)) |item_entity_id| {
-            const item_entity = engine.entityFromU64(item_entity_id);
+        // Despawn the consumed item entity
+        if (registry.tryGet(StoredItem, storage_entity)) |stored| {
+            const item_entity = engine.entityFromU64(stored.item_entity);
             registry.destroyEntity(item_entity);
-            log.info("item_consumed: despawned item entity {d}", .{item_entity_id});
+            log.info("item_consumed: despawned item entity {d}", .{stored.item_entity});
+            registry.remove(StoredItem, storage_entity);
         }
-        _ = task_hooks.storage_items.remove(payload.storage_id);
     }
 
     pub fn need_unfulfillable(payload: anytype) void {

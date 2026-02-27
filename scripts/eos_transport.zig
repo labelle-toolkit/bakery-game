@@ -2,13 +2,14 @@
 //
 // Monitors EOS storages for items and assigns idle workers to transport
 // them to matching EIS storages (same item type) when available.
+//
+// All game-side state is stored in ECS components (no HashMaps).
 
 const std = @import("std");
 const engine = @import("labelle-engine");
 const labelle_needs = @import("labelle-needs");
 const main = @import("../main.zig");
 const movement_target = @import("../components/movement_target.zig");
-const task_hooks = @import("../hooks/task_hooks.zig");
 
 // Use direct logging for visibility
 const log = std.log;
@@ -24,27 +25,16 @@ const Storage = BoundTypes.Storage;
 const Worker = BoundTypes.Worker;
 const Locked = labelle_needs.Locked;
 
-/// Track pending transports: eos_id -> eis_id
-pub var pending_transports: std.AutoHashMap(u64, u64) = undefined;
-/// Track which EOS each worker is picking from: worker_id -> eos_id
-pub var worker_transport_from: std.AutoHashMap(u64, u64) = undefined;
-/// Track which EIS each worker is delivering to: worker_id -> eis_id
-pub var worker_transport_to: std.AutoHashMap(u64, u64) = undefined;
-var initialized: bool = false;
-
-pub fn ensureInit() void {
-    if (!initialized) {
-        pending_transports = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_transport_from = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_transport_to = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        initialized = true;
-    }
-}
+// ECS components for game-side state
+const StoredItem = main.StoredItem;
+const CarriedItem = main.CarriedItem;
+const AssignedWorkstation = main.AssignedWorkstation;
+const TransportTask = main.TransportTask;
+const PendingTransport = main.PendingTransport;
 
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
     _ = game;
-    ensureInit();
     log.info("[EosTransport] Script initialized", .{});
 }
 
@@ -55,9 +45,6 @@ pub fn deinit() void {
 pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     _ = scene;
     _ = dt;
-
-    ensureInit();
-    task_hooks.ensureWorkerItemsInit();
 
     const registry = game.getRegistry();
 
@@ -72,10 +59,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         if (registry.tryGet(MovementTarget, worker_entity) != null) continue;
 
         // Skip if worker is assigned to a workstation (task engine will handle)
-        if (task_hooks.worker_workstation.get(worker_id) != null) continue;
+        if (registry.tryGet(AssignedWorkstation, worker_entity) != null) continue;
 
         // Skip if worker is carrying an item
-        if (task_hooks.worker_carried_items.get(worker_id) != null) continue;
+        if (registry.tryGet(CarriedItem, worker_entity) != null) continue;
 
         // This worker is idle - try to find a transport task
         if (tryAssignTransport(registry, worker_entity, worker_id)) {
@@ -89,8 +76,6 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 /// Called from task_hooks.worker_released so EOS transport gets a chance
 /// before the task engine reassigns the worker.
 pub fn tryAssignForWorker(worker_id: u64, game: *Game) bool {
-    ensureInit();
-    task_hooks.ensureWorkerItemsInit();
     const registry = game.getRegistry();
     const worker_entity = engine.entityFromU64(worker_id);
     return tryAssignTransport(registry, worker_entity, worker_id);
@@ -117,13 +102,11 @@ fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64)
         // Only look at EOS storages
         if (storage.role != .eos) continue;
 
-        const eos_id = engine.entityToU64(eos_entity);
-
         // Skip if no item in this EOS
-        if (task_hooks.storage_items.get(eos_id) == null) continue;
+        if (registry.tryGet(StoredItem, eos_entity) == null) continue;
 
         // Skip if transport already pending from this EOS
-        if (pending_transports.get(eos_id) != null) continue;
+        if (registry.tryGet(PendingTransport, eos_entity) != null) continue;
 
         // Skip if locked by drink system (worker is seeking this water)
         if (registry.tryGet(Locked, eos_entity) != null) continue;
@@ -138,12 +121,12 @@ fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64)
         const dist = @sqrt(dx * dx + dy * dy);
 
         // Check if there's a matching EIS that needs this item type
-        if (findMatchingEIS(registry, item_type, eos_id)) |_| {
+        if (findMatchingEIS(registry, item_type)) |_| {
             // Found a valid transport target
             if (dist < best_distance) {
                 best_distance = dist;
                 best_eos_entity = eos_entity;
-                best_eos_id = eos_id;
+                best_eos_id = engine.entityToU64(eos_entity);
                 best_eos_item_type = item_type;
                 best_eos_pos = eos_pos.*;
             }
@@ -151,15 +134,17 @@ fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64)
     }
 
     // Assign transport if we found a valid EOS
-    if (best_eos_entity) |_| {
+    if (best_eos_entity) |eos_entity| {
         if (best_eos_item_type) |item_type| {
-            if (findMatchingEIS(registry, item_type, best_eos_id)) |eis_id| {
-                // Mark this transport as pending
-                pending_transports.put(best_eos_id, eis_id) catch return false;
+            if (findMatchingEIS(registry, item_type)) |eis_id| {
+                // Mark this transport as pending (ECS component on EOS entity)
+                registry.set(eos_entity, PendingTransport{ .target_eis = eis_id });
 
-                // Track worker transport source and destination
-                worker_transport_from.put(worker_id, best_eos_id) catch return false;
-                worker_transport_to.put(worker_id, eis_id) catch return false;
+                // Track worker transport source and destination (ECS component on worker)
+                registry.set(worker_entity, TransportTask{
+                    .from_storage = best_eos_id,
+                    .to_storage = eis_id,
+                });
 
                 // Set worker movement target to EOS
                 const pos = best_eos_pos.?;
@@ -189,9 +174,7 @@ fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64)
 }
 
 /// Find an EIS that accepts the given item type and doesn't already have an item
-fn findMatchingEIS(registry: anytype, item_type: main.Items, exclude_eos_id: u64) ?u64 {
-    _ = exclude_eos_id;
-
+fn findMatchingEIS(registry: anytype, item_type: main.Items) ?u64 {
     var storage_view = registry.view(.{ Storage, Position });
     var eis_iter = storage_view.entityIterator();
 
@@ -208,15 +191,17 @@ fn findMatchingEIS(registry: anytype, item_type: main.Items, exclude_eos_id: u64
         const eis_id = engine.entityToU64(eis_entity);
 
         // Skip if EIS already has an item
-        if (task_hooks.storage_items.get(eis_id) != null) continue;
+        if (registry.tryGet(StoredItem, eis_entity) != null) continue;
 
         // Skip if there's already a pending transport to this EIS
-        var pending_iter = pending_transports.valueIterator();
         var already_targeted = false;
-        while (pending_iter.next()) |target_eis| {
-            if (target_eis.* == eis_id) {
-                already_targeted = true;
-                break;
+        var pt_iter = storage_view.entityIterator();
+        while (pt_iter.next()) |pt_entity| {
+            if (registry.tryGet(PendingTransport, pt_entity)) |pt| {
+                if (pt.target_eis == eis_id) {
+                    already_targeted = true;
+                    break;
+                }
             }
         }
         if (already_targeted) continue;

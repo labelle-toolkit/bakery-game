@@ -4,6 +4,8 @@
 // registers workers and facilities, ticks every frame.
 // Engine lifecycle (init/deinit) is handled by createEngineHooks.
 // Hook handlers are in hooks/needs_hooks.zig.
+//
+// All game-side state is stored in ECS components (no HashMaps or arrays).
 
 const std = @import("std");
 const engine = @import("labelle-engine");
@@ -12,8 +14,6 @@ const labelle_tasks = @import("labelle-tasks");
 const main = @import("../main.zig");
 const movement_target = @import("../components/movement_target.zig");
 const work_progress = @import("../components/work_progress.zig");
-const needs_hooks = @import("../hooks/needs_hooks.zig");
-const task_hooks = @import("../hooks/task_hooks.zig");
 
 const log = std.log.scoped(.needs_manager);
 
@@ -32,6 +32,12 @@ const NeedsContext = main.labelle_needsContext;
 const TaskContext = main.labelle_tasksContext;
 const Need = main.Needs;
 const Items = main.Items;
+
+// ECS components for game-side state
+const StoredItem = main.StoredItem;
+const StoreTarget = main.StoreTarget;
+const DeferredSleep = main.DeferredSleep;
+const DeferredDrink = main.DeferredDrink;
 
 // --- Public configuration for scene switching ---
 
@@ -54,8 +60,6 @@ fn findWaterSource(worker_id: u64, need: Need, level: labelle_needs.NeedLevel) ?
     // Access registry via shared pointer
     const registry = labelle_needs.getSharedRegistry(engine.EngineTypes.Registry) orelse return null;
 
-    task_hooks.ensureWorkerItemsInit();
-
     // Get worker position for nearest-water selection
     const worker_entity = engine.entityFromU64(worker_id);
     const worker_pos = registry.tryGet(Position, worker_entity) orelse return null;
@@ -72,15 +76,14 @@ fn findWaterSource(worker_id: u64, need: Need, level: labelle_needs.NeedLevel) ?
             const s = count_view.get(Storage, se);
             const accepts = s.accepts orelse continue;
             if (accepts != .Water) continue;
-            const sid = engine.entityToU64(se);
             if (s.role == .eos) {
-                if (task_hooks.storage_items.get(sid) != null and
+                if (registry.tryGet(StoredItem, se) != null and
                     registry.tryGet(Locked, se) == null)
                 {
                     eos_water_available += 1;
                 }
             } else if (s.role == .eis) {
-                if (task_hooks.storage_items.get(sid) == null) {
+                if (registry.tryGet(StoredItem, se) == null) {
                     eis_water_demand += 1;
                 }
             }
@@ -112,15 +115,14 @@ fn findWaterSource(worker_id: u64, need: Need, level: labelle_needs.NeedLevel) ?
         const accepts = storage.accepts orelse continue;
         if (accepts != .Water) continue;
 
-        const storage_id = engine.entityToU64(storage_entity);
-
         // Must actually have an item in it
-        if (task_hooks.storage_items.get(storage_id) == null) continue;
+        if (registry.tryGet(StoredItem, storage_entity) == null) continue;
 
         // Skip storages locked by another worker
         if (registry.tryGet(Locked, storage_entity) != null) continue;
 
         // Distance to worker
+        const storage_id = engine.entityToU64(storage_entity);
         const spos = storage_view.get(Position, storage_entity);
         const dx = spos.x - worker_pos.x;
         const dy = spos.y - worker_pos.y;
@@ -141,8 +143,6 @@ fn findWaterSource(worker_id: u64, need: Need, level: labelle_needs.NeedLevel) ?
 
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
-
-    needs_hooks.clearPendingSleep();
 
     const initial_sleep = override_initial_sleep orelse 1.0;
     override_initial_sleep = null;
@@ -199,7 +199,6 @@ pub fn init(game: *Game, scene: *Scene) void {
     log.info("Registered {d} workers with needs engine", .{worker_count});
 
     // Seed standalone Water storages with Water items for Drink need
-    task_hooks.ensureWorkerItemsInit();
     var seed_view = registry.view(.{ Storage, Position });
     var seed_iter = seed_view.entityIterator();
     var seeded_count: u32 = 0;
@@ -220,7 +219,7 @@ pub fn init(game: *Game, scene: *Scene) void {
             .color = .{ .r = 100, .g = 150, .b = 255, .a = 255 },
         });
         const water_id = engine.entityToU64(water_entity);
-        task_hooks.storage_items.put(storage_id, water_id) catch {};
+        registry.set(storage_entity, StoredItem{ .item_entity = water_id });
         log.info("Seeded Water item {d} at standalone storage {d} ({d:.0},{d:.0})", .{
             water_id, storage_id, pos.x, pos.y,
         });
@@ -257,7 +256,6 @@ pub fn init(game: *Game, scene: *Scene) void {
 }
 
 pub fn deinit() void {
-    needs_hooks.clearPendingSleep();
     log.info("Script deinitialized", .{});
 }
 
@@ -269,29 +267,41 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
     NeedsContext.tick(dt);
 
-    // Check for deferred sleep: workers whose work just completed
     const registry = game.getRegistry();
-    var i: usize = 0;
-    while (i < needs_hooks.getPendingCount()) {
-        const worker_id = needs_hooks.getPendingWorker(i);
-        const facility_id = needs_hooks.getPendingFacility(i);
-        const worker_entity = engine.entityFromU64(worker_id);
+
+    // Check for deferred sleep: workers whose work just completed
+    // Snapshot worker IDs to avoid iterator invalidation during component removal
+    const MAX_DEFERRED = 16;
+    var ds_ids: [MAX_DEFERRED]u64 = undefined;
+    var ds_count: usize = 0;
+    {
+        var ds_view = registry.view(.{ Worker, DeferredSleep });
+        var ds_iter = ds_view.entityIterator();
+        while (ds_iter.next()) |we| {
+            if (ds_count < MAX_DEFERRED) {
+                ds_ids[ds_count] = engine.entityToU64(we);
+                ds_count += 1;
+            }
+        }
+    }
+    for (ds_ids[0..ds_count]) |wid| {
+        const worker_entity = engine.entityFromU64(wid);
+        const deferred = registry.tryGet(DeferredSleep, worker_entity) orelse continue;
+        const facility_id = deferred.facility_id;
 
         // Keep deferring while worker is working OR doing post-work IOS→EOS delivery
-        task_hooks.ensureWorkerItemsInit();
         if (registry.tryGet(WorkProgress, worker_entity) != null or
-            task_hooks.worker_store_target.get(worker_id) != null)
+            registry.tryGet(StoreTarget, worker_entity) != null)
         {
-            i += 1;
             continue;
         }
 
-        log.info("Deferred sleep resolved: worker {d} work done, now seeking bed {d}", .{ worker_id, facility_id });
+        log.info("Deferred sleep resolved: worker {d} work done, now seeking bed {d}", .{ wid, facility_id });
         const bed_entity = engine.entityFromU64(facility_id);
         if (registry.tryGet(Position, bed_entity)) |bed_pos| {
             // Call workerUnavailable BEFORE setting MovementTarget, because
             // workerUnavailable may trigger transport_cancelled which removes MovementTarget
-            _ = TaskContext.workerUnavailable(worker_id);
+            _ = TaskContext.workerUnavailable(wid);
             registry.set(worker_entity, MovementTarget{
                 .target_x = bed_pos.x,
                 .target_y = bed_pos.y,
@@ -299,35 +309,44 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             });
         }
 
-        needs_hooks.removePendingAtIndex(i);
+        registry.remove(DeferredSleep, worker_entity);
     }
 
     // Check for deferred drink: workers whose work just completed
-    var j: usize = 0;
-    while (j < needs_hooks.getDrinkPendingCount()) {
-        const worker_id = needs_hooks.getDrinkPendingWorker(j);
-        const storage_id = needs_hooks.getDrinkPendingStorage(j);
-        const worker_entity = engine.entityFromU64(worker_id);
+    var dd_ids: [MAX_DEFERRED]u64 = undefined;
+    var dd_count: usize = 0;
+    {
+        var dd_view = registry.view(.{ Worker, DeferredDrink });
+        var dd_iter = dd_view.entityIterator();
+        while (dd_iter.next()) |we| {
+            if (dd_count < MAX_DEFERRED) {
+                dd_ids[dd_count] = engine.entityToU64(we);
+                dd_count += 1;
+            }
+        }
+    }
+    for (dd_ids[0..dd_count]) |wid| {
+        const worker_entity = engine.entityFromU64(wid);
+        const deferred = registry.tryGet(DeferredDrink, worker_entity) orelse continue;
+        const storage_id = deferred.storage_id;
 
         // Keep deferring while worker is working OR doing post-work IOS→EOS delivery
-        task_hooks.ensureWorkerItemsInit();
         if (registry.tryGet(WorkProgress, worker_entity) != null or
-            task_hooks.worker_store_target.get(worker_id) != null)
+            registry.tryGet(StoreTarget, worker_entity) != null)
         {
-            j += 1;
             continue;
         }
 
-        log.info("Deferred drink resolved: worker {d} work done, now seeking water at storage {d}", .{ worker_id, storage_id });
+        log.info("Deferred drink resolved: worker {d} work done, now seeking water at storage {d}", .{ wid, storage_id });
 
         // Lock storage now (was deferred)
         const storage_entity = engine.entityFromU64(storage_id);
-        registry.set(storage_entity, Locked{ .locked_by = worker_id });
-        log.info("Deferred drink: locked storage {d} for worker {d}", .{ storage_id, worker_id });
+        registry.set(storage_entity, Locked{ .locked_by = wid });
+        log.info("Deferred drink: locked storage {d} for worker {d}", .{ storage_id, wid });
         if (registry.tryGet(Position, storage_entity)) |storage_pos| {
             // Call workerUnavailable BEFORE setting MovementTarget, because
             // workerUnavailable may trigger transport_cancelled which removes MovementTarget
-            _ = TaskContext.workerUnavailable(worker_id);
+            _ = TaskContext.workerUnavailable(wid);
             registry.set(worker_entity, MovementTarget{
                 .target_x = storage_pos.x,
                 .target_y = storage_pos.y,
@@ -335,7 +354,7 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             });
         }
 
-        needs_hooks.removeDrinkPendingAtIndex(j);
+        registry.remove(DeferredDrink, worker_entity);
     }
 
     // Draw need level bars above workers

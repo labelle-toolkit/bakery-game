@@ -6,6 +6,8 @@
 //
 // Hook payloads are enriched with .registry and .game pointers,
 // so handlers can access the ECS directly.
+//
+// All game-side state is stored in ECS components (no HashMaps).
 
 const std = @import("std");
 const log = std.log.scoped(.task_hooks);
@@ -13,6 +15,14 @@ const engine = @import("labelle-engine");
 const labelle_tasks = @import("labelle-tasks");
 const movement_target = @import("../components/movement_target.zig");
 const work_progress = @import("../components/work_progress.zig");
+const stored_item_mod = @import("../components/stored_item.zig");
+const carried_item_mod = @import("../components/carried_item.zig");
+const assigned_workstation_mod = @import("../components/assigned_workstation.zig");
+const transport_task_mod = @import("../components/transport_task.zig");
+const store_target_mod = @import("../components/store_target.zig");
+const pickup_source_mod = @import("../components/pickup_source.zig");
+const pending_arrival_mod = @import("../components/pending_arrival.zig");
+const dangling_target_mod = @import("../components/dangling_target.zig");
 const items = @import("../enums/items.zig");
 
 // Import bread prefab for instantiation in process_completed
@@ -21,6 +31,14 @@ const bread_prefab = @import("../prefabs/bread.zon");
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
 const WorkProgress = work_progress.WorkProgress;
+const StoredItem = stored_item_mod.StoredItem;
+const CarriedItem = carried_item_mod.CarriedItem;
+const AssignedWorkstation = assigned_workstation_mod.AssignedWorkstation;
+const TransportTask = transport_task_mod.TransportTask;
+const StoreTarget = store_target_mod.StoreTarget;
+const PickupSource = pickup_source_mod.PickupSource;
+const PendingArrival = pending_arrival_mod.PendingArrival;
+const DanglingTarget = dangling_target_mod.DanglingTarget;
 const Position = engine.render.Position;
 const Shape = engine.render.Shape;
 const render = engine.render;
@@ -30,58 +48,6 @@ const Storage = BoundTypes.Storage;
 const Items = items.Items;
 const main = @import("../main.zig");
 const Context = main.labelle_tasksContext;
-
-/// Track which item entity each worker is carrying (worker_id -> item_id)
-pub var worker_carried_items: std.AutoHashMap(u64, u64) = undefined;
-/// Track which EIS each dangling item should be delivered to (item_id -> eis_id)
-pub var dangling_item_targets: std.AutoHashMap(u64, u64) = undefined;
-/// Track which item entity is at each storage (storage_id -> item_id)
-pub var storage_items: std.AutoHashMap(u64, u64) = undefined;
-/// Track which storage the worker is currently picking from (worker_id -> storage_id)
-pub var worker_pickup_storage: std.AutoHashMap(u64, u64) = undefined;
-/// Track which workstation each worker is assigned to (worker_id -> workstation_id)
-pub var worker_workstation: std.AutoHashMap(u64, u64) = undefined;
-/// Track target EOS for store step (worker_id -> eos_id)
-pub var worker_store_target: std.AutoHashMap(u64, u64) = undefined;
-/// Track workers that need to move to workstation before starting work (worker_id -> true)
-pub var worker_pending_arrival: std.AutoHashMap(u64, bool) = undefined;
-/// Track engine-driven transport source (worker_id -> from_storage_id)
-pub var worker_transport_from: std.AutoHashMap(u64, u64) = undefined;
-/// Track engine-driven transport destination (worker_id -> to_storage_id)
-pub var worker_transport_to: std.AutoHashMap(u64, u64) = undefined;
-var worker_items_initialized: bool = false;
-
-pub fn ensureWorkerItemsInit() void {
-    if (!worker_items_initialized) {
-        // Use c_allocator for WASM compatibility (page_allocator doesn't work in WASM)
-        worker_carried_items = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        dangling_item_targets = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        storage_items = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_pickup_storage = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_workstation = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_store_target = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_pending_arrival = std.AutoHashMap(u64, bool).init(std.heap.c_allocator);
-        worker_transport_from = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_transport_to = std.AutoHashMap(u64, u64).init(std.heap.c_allocator);
-        worker_items_initialized = true;
-    }
-}
-
-/// Clear all game-side tracking maps on scene transition.
-pub fn resetTracking() void {
-    if (!worker_items_initialized) return;
-    worker_carried_items.clearRetainingCapacity();
-    dangling_item_targets.clearRetainingCapacity();
-    storage_items.clearRetainingCapacity();
-    worker_pickup_storage.clearRetainingCapacity();
-    worker_workstation.clearRetainingCapacity();
-    worker_store_target.clearRetainingCapacity();
-    worker_pending_arrival.clearRetainingCapacity();
-    worker_transport_from.clearRetainingCapacity();
-    worker_transport_to.clearRetainingCapacity();
-    GameHooks.delivery_counter = 0;
-    log.info("Game-side tracking maps reset (scene transition)", .{});
-}
 
 /// Game-specific task hooks for labelle-tasks integration.
 /// These handlers respond to task engine events and integrate
@@ -96,11 +62,14 @@ pub const GameHooks = struct {
     /// Move the worker to the workstation position before starting work.
     pub fn worker_assigned(payload: anytype) void {
         log.info("worker_assigned: worker={d} workstation={d}", .{ payload.worker_id, payload.workstation_id });
-        ensureWorkerItemsInit();
-        worker_workstation.put(payload.worker_id, payload.workstation_id) catch {};
 
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+
+        // Track workstation assignment
+        registry.set(worker_entity, AssignedWorkstation{ .workstation_id = payload.workstation_id });
 
         // Get workstation position
         const ws_entity = engine.entityFromU64(payload.workstation_id);
@@ -110,10 +79,9 @@ pub const GameHooks = struct {
         };
 
         // Mark worker as pending arrival (don't start work until they arrive)
-        worker_pending_arrival.put(payload.worker_id, true) catch {};
+        registry.set(worker_entity, PendingArrival{});
 
         // Set MovementTarget to move worker to workstation
-        const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
             .target_x = ws_pos.x,
             .target_y = ws_pos.y,
@@ -130,11 +98,15 @@ pub const GameHooks = struct {
 
     /// Handle worker being released from a workstation.
     pub fn worker_released(payload: anytype) void {
-        ensureWorkerItemsInit();
-        // Note: worker_released payload only has worker_id, not workstation_id
-        const ws_id = worker_workstation.get(payload.worker_id) orelse 0;
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        const ws_id: u64 = if (registry.tryGet(AssignedWorkstation, worker_entity)) |aw| aw.workstation_id else 0;
         log.info("worker_released: worker={d} workstation={d}", .{ payload.worker_id, ws_id });
-        _ = worker_workstation.remove(payload.worker_id);
+        if (registry.tryGet(AssignedWorkstation, worker_entity) != null) {
+            registry.remove(AssignedWorkstation, worker_entity);
+        }
 
         // Try EOS→EIS transport before the task engine reassigns this worker.
         // Without this, the task engine immediately reassigns in tryAssignWorkers
@@ -203,11 +175,10 @@ pub const GameHooks = struct {
         });
 
         // Track which storage the worker is picking from (for visual item pickup)
-        ensureWorkerItemsInit();
-        worker_pickup_storage.put(payload.worker_id, payload.storage_id) catch {};
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, PickupSource{ .storage_id = payload.storage_id });
         log.info("pickup_started: tracking worker {d} picking from storage {d}", .{ payload.worker_id, payload.storage_id });
 
-        const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
             .target_x = storage_pos.x,
             .target_y = storage_pos.y,
@@ -260,19 +231,18 @@ pub const GameHooks = struct {
 
         // Post-process store flow: target is EOS, need to go via IOS
         // Save the target EOS for later (when worker arrives at IOS and needs to go to EOS)
-        ensureWorkerItemsInit();
-        worker_store_target.put(payload.worker_id, payload.storage_id) catch {};
+        registry.set(worker_entity, StoreTarget{ .storage_id = payload.storage_id });
 
         // Find the workstation this worker is assigned to
-        const workstation_id = worker_workstation.get(payload.worker_id) orelse {
+        const assigned_ws = registry.tryGet(AssignedWorkstation, worker_entity) orelse {
             log.err("store_started: worker {d} has no assigned workstation", .{payload.worker_id});
             return;
         };
 
         // Find the IOS storage in the workstation
-        const ws_entity = engine.entityFromU64(workstation_id);
+        const ws_entity = engine.entityFromU64(assigned_ws.workstation_id);
         const workstation = registry.tryGet(Workstation, ws_entity) orelse {
-            log.err("store_started: workstation {d} not found", .{workstation_id});
+            log.err("store_started: workstation {d} not found", .{assigned_ws.workstation_id});
             return;
         };
 
@@ -297,7 +267,7 @@ pub const GameHooks = struct {
             }
         }
 
-        log.err("store_started: no IOS found in workstation {d}", .{workstation_id});
+        log.err("store_started: no IOS found in workstation {d}", .{assigned_ws.workstation_id});
     }
 
     pub fn pickup_dangling_started(payload: anytype) void {
@@ -321,10 +291,9 @@ pub const GameHooks = struct {
         const dangling_item = registry.tryGet(DanglingItem, item_entity) orelse {
             log.err("pickup_dangling_started: item {d} has no DanglingItem component", .{payload.item_id});
             // Still track the worker->item mapping even without item type info
-            ensureWorkerItemsInit();
-            worker_carried_items.put(payload.worker_id, payload.item_id) catch {};
-            // Set MovementTarget anyway
             const worker_entity = engine.entityFromU64(payload.worker_id);
+            registry.set(worker_entity, CarriedItem{ .item_entity = payload.item_id });
+            // Set MovementTarget anyway
             registry.set(worker_entity, MovementTarget{
                 .target_x = item_pos.x,
                 .target_y = item_pos.y,
@@ -336,8 +305,8 @@ pub const GameHooks = struct {
         log.info("pickup_dangling_started: item type is {s}", .{@tagName(dangling_item.item_type)});
 
         // Track which item this worker will pick up
-        ensureWorkerItemsInit();
-        worker_carried_items.put(payload.worker_id, payload.item_id) catch {};
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, CarriedItem{ .item_entity = payload.item_id });
 
         // Find the EIS that accepts this item type and track it
         var storage_view = registry.view(.{ Storage, Position });
@@ -347,7 +316,7 @@ pub const GameHooks = struct {
             const storage = storage_view.get(Storage, storage_entity);
             if (storage.role == .eis and storage.accepts == dangling_item.item_type) {
                 const storage_id = engine.entityToU64(storage_entity);
-                dangling_item_targets.put(payload.item_id, storage_id) catch {};
+                registry.set(item_entity, DanglingTarget{ .storage_id = storage_id });
                 log.info("pickup_dangling_started: item {d} ({s}) -> EIS {d}", .{
                     payload.item_id,
                     @tagName(dangling_item.item_type),
@@ -362,7 +331,6 @@ pub const GameHooks = struct {
         }
 
         // Set MovementTarget component on the worker
-        const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
             .target_x = item_pos.x,
             .target_y = item_pos.y,
@@ -372,19 +340,19 @@ pub const GameHooks = struct {
 
     /// Handle worker starting transport from EOS to destination (EIS or standalone).
     pub fn transport_started(payload: anytype) void {
-        ensureWorkerItemsInit();
-
-        // Track transport source and destination for worker_movement handlers
-        worker_transport_from.put(payload.worker_id, payload.from_storage_id) catch {};
-        worker_transport_to.put(payload.worker_id, payload.to_storage_id) catch {};
-
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        // Track transport source and destination for worker_movement handlers
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        registry.set(worker_entity, TransportTask{
+            .from_storage = payload.from_storage_id,
+            .to_storage = payload.to_storage_id,
+        });
 
         const from_entity = engine.entityFromU64(payload.from_storage_id);
         const from_pos = registry.tryGet(Position, from_entity) orelse return;
 
-        const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
             .target_x = from_pos.x,
             .target_y = from_pos.y,
@@ -401,19 +369,22 @@ pub const GameHooks = struct {
 
     /// Handle transport being rerouted to a new destination mid-flight.
     pub fn transport_rerouted(payload: anytype) void {
-        ensureWorkerItemsInit();
-
-        // Update destination tracking
-        worker_transport_to.put(payload.worker_id, payload.to_storage_id) catch {};
-
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        // Update destination tracking
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        if (registry.tryGet(TransportTask, worker_entity)) |task| {
+            registry.set(worker_entity, TransportTask{
+                .from_storage = task.from_storage,
+                .to_storage = payload.to_storage_id,
+            });
+        }
 
         // Redirect worker to new destination
         const dest_entity = engine.entityFromU64(payload.to_storage_id);
         const dest_pos = registry.tryGet(Position, dest_entity) orelse return;
 
-        const worker_entity = engine.entityFromU64(payload.worker_id);
         registry.set(worker_entity, MovementTarget{
             .target_x = dest_pos.x,
             .target_y = dest_pos.y,
@@ -429,18 +400,19 @@ pub const GameHooks = struct {
 
     /// Handle transport being cancelled.
     pub fn transport_cancelled(payload: anytype) void {
-        ensureWorkerItemsInit();
-
-        // Clean up tracking maps
-        _ = worker_transport_from.remove(payload.worker_id);
-        _ = worker_transport_to.remove(payload.worker_id);
-        _ = worker_carried_items.remove(payload.worker_id);
-
         const registry_ptr = payload.registry orelse return;
         const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 
-        // Remove movement target so worker stops (if it has one)
+        // Clean up tracking components (may already be cleaned up)
         const worker_entity = engine.entityFromU64(payload.worker_id);
+        if (registry.tryGet(TransportTask, worker_entity) != null) {
+            registry.remove(TransportTask, worker_entity);
+        }
+        if (registry.tryGet(CarriedItem, worker_entity) != null) {
+            registry.remove(CarriedItem, worker_entity);
+        }
+
+        // Remove movement target so worker stops (if it has one)
         if (registry.tryGet(MovementTarget, worker_entity) != null) {
             registry.remove(MovementTarget, worker_entity);
         }
@@ -477,15 +449,15 @@ pub const GameHooks = struct {
         // Detach item from worker (was attached during transport)
         game.hierarchy.removeParent(item_entity);
 
-        // Clean up worker→item tracking
-        ensureWorkerItemsInit();
-        _ = worker_carried_items.remove(payload.worker_id);
+        // Clean up worker→item tracking (may already be cleaned up by worker_movement)
+        const worker_entity = engine.entityFromU64(payload.worker_id);
+        if (registry.tryGet(CarriedItem, worker_entity) != null) {
+            registry.remove(CarriedItem, worker_entity);
+        }
 
         // Track which item is at this storage (for later pickup by worker)
         std.debug.print("[DEBUG] item_delivered: about to put item {d} at storage {d}\n", .{ payload.item_id, payload.storage_id });
-        storage_items.put(payload.storage_id, payload.item_id) catch |err| {
-            std.debug.print("[DEBUG] item_delivered: storage_items.put failed: {}\n", .{err});
-        };
+        registry.set(storage_entity, StoredItem{ .item_entity = payload.item_id });
         std.debug.print("[DEBUG] item_delivered: tracking item {d} at storage {d}\n", .{ payload.item_id, payload.storage_id });
         log.info("item_delivered: tracking item {d} at storage {d}", .{ payload.item_id, payload.storage_id });
 
@@ -506,25 +478,23 @@ pub const GameHooks = struct {
     /// Always moves the worker to the workstation first; work starts
     /// when arrive_at_workstation fires in worker_movement.zig.
     pub fn process_started(payload: anytype) void {
-        ensureWorkerItemsInit();
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
+
+        const worker_entity = engine.entityFromU64(payload.worker_id);
 
         // Already moving to workstation — nothing to do
-        if (worker_pending_arrival.get(payload.worker_id)) |_| {
+        if (registry.tryGet(PendingArrival, worker_entity) != null) {
             log.info("process_started: worker={d} still moving to workstation, deferring", .{payload.worker_id});
             return;
         }
 
-        const registry_ptr = payload.registry orelse return;
-        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
-
         const ws_entity = engine.entityFromU64(payload.workstation_id);
         const ws_pos = registry.tryGet(Position, ws_entity) orelse return;
 
-        const worker_entity = engine.entityFromU64(payload.worker_id);
-
         // Always move worker to workstation before starting work.
         // If already there, arrive_at_workstation fires on the next frame.
-        worker_pending_arrival.put(payload.worker_id, true) catch {};
+        registry.set(worker_entity, PendingArrival{});
         registry.set(worker_entity, MovementTarget{
             .target_x = ws_pos.x,
             .target_y = ws_pos.y,
@@ -541,17 +511,19 @@ pub const GameHooks = struct {
     pub fn input_consumed(payload: anytype) void {
         const game_ptr = payload.game orelse return;
         const game: *engine.Game = @ptrCast(@alignCast(game_ptr));
+        const registry_ptr = payload.registry orelse return;
+        const registry: *engine.Registry = @ptrCast(@alignCast(registry_ptr));
 
         const storage_id = payload.storage_id;
+        const storage_entity = engine.entityFromU64(storage_id);
 
         // Look up the item entity at this storage and remove its visual
-        ensureWorkerItemsInit();
-        if (storage_items.get(storage_id)) |item_id| {
-            const item_entity = engine.entityFromU64(item_id);
+        if (registry.tryGet(StoredItem, storage_entity)) |stored| {
+            const item_entity = engine.entityFromU64(stored.item_entity);
             // Remove Shape component - this properly untracks from render pipeline
             game.removeShape(item_entity);
-            _ = storage_items.remove(storage_id);
-            log.info("input_consumed: removed shape from item {d} at storage {d}", .{ item_id, storage_id });
+            registry.remove(StoredItem, storage_entity);
+            log.info("input_consumed: removed shape from item {d} at storage {d}", .{ stored.item_entity, storage_id });
         } else {
             log.warn("input_consumed: no item tracked at storage {d}", .{storage_id});
         }
@@ -603,14 +575,9 @@ pub const GameHooks = struct {
                     log.err("process_completed: failed to add shape: {}", .{err});
                     continue;
                 };
-                // NOTE: Do NOT add DanglingItem here. The engine's Store step handles
-                // IOS→EOS delivery via the assigned worker. Adding DanglingItem triggers
-                // evaluateDanglingItems() during handleWorkCompleted, causing reentrancy
-                // that corrupts the worker's assigned_workstation state.
 
-                // Track the output item at IOS (game-side tracking)
-                ensureWorkerItemsInit();
-                storage_items.put(storage_id, engine.entityToU64(item_entity)) catch {};
+                // Track the output item at IOS (ECS component)
+                registry.set(storage_entity, StoredItem{ .item_entity = engine.entityToU64(item_entity) });
 
                 // Notify task engine about the output item in IOS
                 // This sets storage.item_type which is needed for store_started to be dispatched
