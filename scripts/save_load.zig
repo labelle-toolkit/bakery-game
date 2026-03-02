@@ -34,6 +34,8 @@ const ReadyToWork = main.ReadyToWork;
 const FilledNeed = main.FilledNeed;
 const Storage = main.Storage;
 
+const production_system = @import("production_system.zig");
+
 const SAVE_FILE = "savegame.json";
 const MAX_SCENE_ENTITIES = 64;
 const MAX_DYNAMIC_ENTITIES = 128;
@@ -728,9 +730,9 @@ fn remapEntityRefs(comptime T: type, comp: *T, id_map: *const std.AutoHashMap(u6
         comp.workstation_id = remapId(comp.workstation_id, id_map);
         comp.source = remapOptId(comp.source, id_map);
         comp.dest = remapOptId(comp.dest, id_map);
-        // Don't remap item when it's the sentinel value (1 = processing started)
+        // Don't remap item when it's the sentinel value (processing started)
         if (comp.item) |item_id| {
-            if (item_id > 1) comp.item = remapOptId(comp.item, id_map);
+            if (item_id != production_system.processing_sentinel) comp.item = remapOptId(comp.item, id_map);
         }
     } else if (T == Delivering) {
         comp.item_id = remapId(comp.item_id, id_map);
@@ -872,14 +874,5 @@ fn isInSet(id: u64, set: []const u64) bool {
 }
 
 fn createItemShape(item_type: Items) Shape {
-    const color = switch (item_type) {
-        .Water => engine.Color{ .r = 80, .g = 150, .b = 255, .a = 255 },
-        .Flour => engine.Color{ .r = 240, .g = 230, .b = 200, .a = 255 },
-        .Bread => engine.Color{ .r = 200, .g = 150, .b = 80, .a = 255 },
-        else => engine.Color{ .r = 180, .g = 180, .b = 180, .a = 255 },
-    };
-    return Shape{
-        .shape = .{ .circle = .{ .radius = 8 } },
-        .color = color,
-    };
+    return production_system.itemShape(item_type);
 }

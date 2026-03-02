@@ -29,7 +29,7 @@ pub const StorageSlots = struct {
     }
 
     pub fn append(self: *StorageSlots, id: u64) void {
-        if (self.len < 4) {
+        if (self.len < self.items.len) {
             self.items[self.len] = id;
             self.len += 1;
         }

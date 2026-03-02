@@ -36,6 +36,11 @@ const MovementTarget = main.MovementTarget;
 const WorkProgress = main.WorkProgress;
 const Items = main.Items;
 
+/// Sentinel value for WorkingOn.item to indicate "processing started" without
+/// conflicting with any real entity ID. Uses maxInt(i64) cast to u64 so it
+/// fits in JSON integer serialization.
+pub const processing_sentinel: u64 = @intCast(std.math.maxInt(i64));
+
 pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
     const registry = game.getRegistry();
@@ -150,8 +155,9 @@ fn tryAssignWorkstation(game: *Game, registry: anytype, worker_entity: Entity, w
             // Producer: needs at least one empty EOS
             if (!hasEmptyEos(registry, ws)) continue;
         } else {
-            // Non-producer: needs all EIS filled with items
+            // Non-producer: needs all EIS filled and at least one empty EOS
             if (!allEisFilled(registry, ws)) continue;
+            if (!hasEmptyEos(registry, ws)) continue;
         }
 
         const dx = ws_pos.x - worker_pos.x;
@@ -216,8 +222,10 @@ fn tryAssignDelivery(game: *Game, registry: anytype, worker_entity: Entity, work
             const item_pos = item_view.get(Position, item_entity);
             _ = worker_pos;
 
-            // Lock the item
+            // Lock the item and destination storage
             registry.add(item_entity, Locked{ .by = worker_id });
+            const dest_lock_entity = engine.entityFromU64(eis_storage_id);
+            registry.add(dest_lock_entity, Locked{ .by = worker_id });
 
             // Assign Delivering
             registry.add(worker_entity, Delivering{
@@ -249,15 +257,26 @@ fn tryAssignDelivery(game: *Game, registry: anytype, worker_entity: Entity, work
 // ============================================================================
 
 fn updateWorkingWorkers(game: *Game, registry: anytype) void {
-    var worker_view = registry.view(.{ WorkingOn, Worker });
-    var worker_iter = worker_view.entityIterator();
+    // Collect working workers to avoid iterator invalidation on component removal
+    var workers_buf: [32]Entity = undefined;
+    var worker_count: usize = 0;
+    {
+        var worker_view = registry.view(.{ WorkingOn, Worker });
+        var worker_iter = worker_view.entityIterator();
+        while (worker_iter.next()) |worker_entity| {
+            if (worker_count < workers_buf.len) {
+                workers_buf[worker_count] = worker_entity;
+                worker_count += 1;
+            }
+        }
+    }
 
-    while (worker_iter.next()) |worker_entity| {
+    for (workers_buf[0..worker_count]) |worker_entity| {
         // Only act when worker has arrived (no MovementTarget) and no WorkProgress running
         if (registry.tryGet(MovementTarget, worker_entity) != null) continue;
         if (registry.tryGet(WorkProgress, worker_entity) != null) continue;
 
-        const wo = worker_view.get(WorkingOn, worker_entity);
+        const wo = registry.tryGet(WorkingOn, worker_entity) orelse continue;
         const worker_id = engine.entityToU64(worker_entity);
         const ws_entity = engine.entityFromU64(wo.workstation_id);
         const ws = registry.tryGet(Workstation, ws_entity) orelse continue;
@@ -377,8 +396,8 @@ fn advanceProcess(_: *Game, registry: anytype, worker_entity: Entity, worker_id:
             .duration = duration,
         });
 
-        // Mark that processing has started (use sentinel)
-        wo.item = 1; // sentinel: processing started
+        // Mark that processing has started (sentinel value, not a real entity ID)
+        wo.item = processing_sentinel;
 
         std.log.info("[ProductionSystem] Worker {d}: processing started ({d}s)", .{
             worker_id, ws.process_duration,
@@ -530,14 +549,25 @@ fn finishCycle(registry: anytype, worker_entity: Entity, worker_id: u64, wo: *Wo
 // ============================================================================
 
 fn updateDeliveringWorkers(game: *Game, registry: anytype) void {
-    var worker_view = registry.view(.{ Delivering, Worker });
-    var worker_iter = worker_view.entityIterator();
+    // Collect delivering workers to avoid iterator invalidation on component removal
+    var workers_buf: [32]Entity = undefined;
+    var worker_count: usize = 0;
+    {
+        var worker_view = registry.view(.{ Delivering, Worker });
+        var worker_iter = worker_view.entityIterator();
+        while (worker_iter.next()) |worker_entity| {
+            if (worker_count < workers_buf.len) {
+                workers_buf[worker_count] = worker_entity;
+                worker_count += 1;
+            }
+        }
+    }
 
-    while (worker_iter.next()) |worker_entity| {
+    for (workers_buf[0..worker_count]) |worker_entity| {
         // Only act when worker has arrived
         if (registry.tryGet(MovementTarget, worker_entity) != null) continue;
 
-        const del = worker_view.get(Delivering, worker_entity);
+        const del = registry.tryGet(Delivering, worker_entity) orelse continue;
         const worker_id = engine.entityToU64(worker_entity);
 
         if (del.current_step == 0) {
@@ -575,9 +605,12 @@ fn updateDeliveringWorkers(game: *Game, registry: anytype) void {
             registry.add(dest_entity, WithItem{ .item_id = item_id });
             registry.set(item_entity, Stored{ .storage_id = dest_id });
 
-            // Unlock item
+            // Unlock item and destination storage
             if (registry.tryGet(Locked, item_entity) != null) {
                 registry.remove(Locked, item_entity);
+            }
+            if (registry.tryGet(Locked, dest_entity) != null) {
+                registry.remove(Locked, dest_entity);
             }
 
             // Move item to EIS position
@@ -705,6 +738,9 @@ fn consumeIisItems(registry: anytype, ws: *const Workstation) void {
             if (registry.tryGet(Position, item_entity) != null) {
                 registry.remove(Position, item_entity);
             }
+            if (registry.tryGet(Shape, item_entity) != null) {
+                registry.remove(Shape, item_entity);
+            }
 
             std.log.info("[ProductionSystem] Consumed item {d} from IIS {d}", .{
                 with_item.item_id, iis_id,
@@ -742,7 +778,7 @@ fn createOutputItems(registry: anytype, ws: *const Workstation) void {
     }
 }
 
-fn itemShape(item_type: Items) Shape {
+pub fn itemShape(item_type: Items) Shape {
     const color = switch (item_type) {
         .Water => engine.Color{ .r = 80, .g = 150, .b = 255, .a = 255 },
         .Flour => engine.Color{ .r = 240, .g = 230, .b = 200, .a = 255 },
