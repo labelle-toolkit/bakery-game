@@ -4,6 +4,14 @@
 // move the entity towards the target position and perform the action
 // when it arrives.
 
+/// Component that directs a worker to move towards a target position
+pub const MovementTarget = struct {
+    target_x: f32,
+    target_y: f32,
+    speed: f32 = 200.0, // pixels per second
+    action: Action,
+};
+
 /// Action to perform when the worker arrives at the target
 pub const Action = enum {
     pickup,
@@ -14,12 +22,4 @@ pub const Action = enum {
     transport_deliver, // Worker delivering item from EOS to EIS
     deliver_to_iis, // Worker delivering item from EIS to IIS
     pickup_from_ios, // Worker picking up output item from IOS
-};
-
-/// Component that directs a worker to move towards a target position
-pub const MovementTarget = struct {
-    target_x: f32,
-    target_y: f32,
-    speed: f32 = 200.0, // pixels per second
-    action: Action,
 };

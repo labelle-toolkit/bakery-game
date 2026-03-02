@@ -1,6 +1,6 @@
 // Item types for the bakery game
 
-pub const ItemType = enum {
+pub const Items = enum {
     // Raw ingredients
     Flour,
     Water,
@@ -19,6 +19,3 @@ pub const ItemType = enum {
     Cake,
     Cookie,
 };
-
-// Alias for component registry
-pub const Items = ItemType;

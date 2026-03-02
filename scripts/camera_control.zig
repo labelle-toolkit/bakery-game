@@ -11,7 +11,7 @@ const main = @import("../main.zig");
 const Game = engine.Game;
 const Scene = engine.Scene;
 const Position = engine.Position;
-const Worker = main.labelle_tasksBindItems.Worker;
+const Worker = main.Worker;
 
 var screenshot_counter: u32 = 0;
 var frame_count: u32 = 0;
