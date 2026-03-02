@@ -111,12 +111,17 @@ Binds a worker to a workstation. `source`/`dest`/`item` track the current 2-phas
 ```
 Delivering {
     item_id: EntityId,
-    storage_id: EntityId,
-    current_step: u32,  // 0 = walk to item, 1 = carry to storage
+    source_storage: ?EntityId,  // null = dangling (on ground), set = EOS
+    dest_storage: EntityId,
+    current_step: u32,  // 0 = walk to item/source, 1 = carry to dest
 }
 ```
 
-Tracks a worker delivering a dangling item to a standalone storage.
+Tracks a worker delivering an item to a storage. Handles two cases:
+- **Dangling items** (`source_storage = null`): item is on the ground, walk to it and pick up
+- **EOS items** (`source_storage = eos_entity`): item is in an EOS storage, walk to EOS, remove from storage, then carry to destination
+
+Destination can be any matching storage without `IIS` or `IOS` markers (i.e., EIS or standalone storages).
 
 ### TaskComplete
 

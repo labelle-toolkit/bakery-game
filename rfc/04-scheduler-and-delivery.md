@@ -10,7 +10,7 @@ For each idle worker, in order:
 
 1. **Check needs** — if `Needs.mostUrgent()` returns a need below normal level and `canAddressNeed()` returns true, create a `Need` component and assign the first step. Lock the resource entity immediately.
 2. **Find nearest workstation** — query all `Workstation + Position + ReadyToWork` without `Locked`. Pick the nearest. Lock both worker and workstation mutually.
-3. **Find dangling item delivery** — find nearest `Item` without `Stored` or `Locked` that has a matching empty, unlocked standalone storage (not IIS, not IOS). Lock item, storage, and worker. Assign `Delivering` component.
+3. **Find available item for delivery** — find nearest available item (dangling or in EOS) that has a matching empty, unlocked destination storage (not IIS, not IOS). Lock item, destination storage, and worker. Assign `Delivering` component.
 4. **Wander** — assign `CurrentTask.wandering` with a deterministic offset from current position.
 
 ### Workstation Locking
@@ -22,30 +22,42 @@ When a worker is assigned a workstation:
 
 Both locks are released together via `releaseWorker`.
 
-## 4.2 Dangling Item Delivery
+## 4.2 Item Delivery
 
-Items become dangling when:
-- Dropped by an interrupted worker (red need or combat)
-- Created as scene entities (flour, water in bakery-game)
-- Output placed in a full EOS area
+The scheduler assigns delivery tasks for items that need to reach a storage. Two sources:
 
-A dangling item is an entity with `Item` but without `Stored` or `Locked`.
+1. **Dangling items** — on the ground, no `Stored`, no `Locked`. Created by:
+   - Dropped by an interrupted worker (red need or combat)
+   - Scene-spawned items (flour, water in bakery-game)
+2. **EOS items** — in an EOS storage (`Item + Stored`, storage has `EOS` marker). Available for relocation when not `Locked`.
+
+Both deliver to any matching empty, unlocked storage that is not internal to a workstation (no `IIS`, no `IOS`). Valid destinations are EIS storages and standalone storages.
 
 ### Delivery Flow
 
-1. Scheduler finds nearest dangling item with a matching empty, unlocked storage
-2. Lock item, storage, and worker upfront
-3. Assign `Delivering { .item_id, .storage_id, .current_step = 0 }` + `CurrentTask.walking` toward item
-4. **Step 0** (arrive at item): remove `Stored` if present, add `Locked` to item, assign `CurrentTask.carrying_item` toward storage
-5. **Step 1** (arrive at storage): add `Stored` to item, add `WithItem` to storage, release storage lock, release worker
+1. Scheduler finds the nearest available item (dangling or EOS) with a matching empty, unlocked destination storage
+2. Lock item, destination storage, and worker upfront. If source is EOS, lock the source storage too.
+3. Assign `Delivering { .item_id, .source_storage, .dest_storage, .current_step = 0 }` + `CurrentTask.walking` toward item position
 
-### Storage Matching
+**Step 0** (arrive at item/source):
+- If `source_storage` is set (EOS): remove `WithItem` from source storage, remove `Stored` from item, release source storage lock
+- Lock item, assign `CurrentTask.carrying_item` toward dest storage
 
-`findDanglingItemAndStorage` checks:
-- Storage has `Storage.accepted_items` containing the item's `ItemType`
-- Storage has no `WithItem` (empty)
-- Storage has no `Locked` (not reserved)
-- Storage has no `IIS` or `IOS` marker (standalone or EIS/EOS only)
+**Step 1** (arrive at dest storage):
+- Add `Stored { .storage_id = dest_storage }` to item, add `WithItem { .item_id }` to dest storage
+- Release item lock, dest storage lock, and worker lock
+
+### Item and Storage Matching
+
+`findAvailableItemAndStorage` scans two pools:
+
+**Dangling items**: `Item + Position` without `Stored` or `Locked`
+
+**EOS items**: `Item + Stored` where the storage entity has an `EOS` marker and no `Locked`
+
+**Destination storages**: `Storage + Position` without `WithItem`, `Locked`, `IIS`, or `IOS`, where `Storage.accepted_items` contains the item's `ItemType`
+
+Priority is nearest item to the worker. For items with multiple valid destinations, the first matching storage is selected.
 
 ## 4.3 Interruption
 
@@ -61,13 +73,6 @@ Dropped items will be picked up later by the scheduler's dangling delivery path.
 
 ## 4.4 EOS-to-EIS Transport (replaces eos_transport.zig)
 
-In the current bakery-game, `eos_transport.zig` manually scans for idle workers and moves items from EOS to EIS of another workstation. This is a workaround because `labelle-tasks` doesn't handle cross-workstation transport.
+In the current bakery-game, `eos_transport.zig` manually scans for idle workers and moves items from EOS to EIS with 3 extra HashMaps. This is replaced by the unified delivery system described in 4.2.
 
-In the ECS-native architecture, this happens naturally:
-
-1. Items in EOS are in storage (`Item + Stored`)
-2. When a worker retrieves an item from EOS, the item leaves storage and may become dangling
-3. If a workstation's EIS needs items, `WorkstationReadinessSystem` marks it as not ready
-4. The scheduler's dangling delivery path picks up unowned items and routes them to matching empty storages (including EIS)
-
-Alternatively, the scheduler could directly assign EOS→EIS transfers as a workstation restocking task. This is an open design question — see [06-migration-plan.md](06-migration-plan.md).
+EOS items are treated as available for relocation — the same `Delivering` component and scheduler scan handles both dangling items and EOS items. When the Water Well produces Water and places it in EOS, the scheduler sees an EOS item matching the Oven's empty EIS and assigns a delivery. No separate script needed.

@@ -13,12 +13,12 @@ This creates several problems:
 
 ## 1.2 Target Architecture
 
-Replace the plugin with **6 ECS systems** that run every frame in fixed order:
+Replace the plugin with **5 ECS systems** and a **game-side movement script**, running every frame in fixed order:
 
 1. **NeedsDecaySystem** — drains thirst/hunger, adds/removes threshold marker components
 2. **NeedsEvaluationSystem** — red needs interrupt workers; yellow needs signal via `FilledNeed`
-3. **WorkerExecutionSystem** — moves workers, ticks processing timers
-4. **TaskCompletionSystem** — routes finished tasks through workstation/need/delivery pipelines
+3. **Game movement script** — moves workers toward `CurrentTask` destinations, ticks processing timers, adds `TaskComplete` on arrival/completion. Handles hierarchy attach/detach for carried items. Owned by the game, not the scheduling library.
+4. **TaskCompletionSystem** — routes `TaskComplete` through workstation/need/delivery pipelines
 5. **WorkstationReadinessSystem** — adds/removes `ReadyToWork` marker on workstations
 6. **SchedulerSystem** — assigns idle workers by priority
 

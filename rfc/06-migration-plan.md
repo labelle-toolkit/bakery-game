@@ -50,75 +50,104 @@ Files changed:
 ### Current Prefab Format (labelle-tasks)
 
 ```zon
-// prefabs/oven.zon (current)
-.{
-    .components = .{
-        .Position = .{ .x = 200, .y = 100 },
-        .Shape = .{ ... },
-        .Workstation = .{ .process_duration = 5 },
-    },
-    .children = .{
-        .eis_flour = .{ .components = .{
-            .Position = .{ .x = -20, .y = 0 },
+// prefabs/oven.zon (current) — storages nested under Workstation.storages
+.Workstation = .{
+    .process_duration = 5,
+    .storages = .{
+        .{ .components = .{
+            .Position = .{ .x = -60, .y = 80 },
             .Storage = .{ .role = .eis, .accepts = .Flour },
+            .Shape = .{ ... },
         }},
-        // ...
+        .{ .components = .{
+            .Position = .{ .x = -50, .y = 0 },
+            .Storage = .{ .role = .iis, .accepts = .Flour },
+            .Shape = .{ ... },
+        }},
+        // ... IOS, EOS similarly
     },
-}
+},
 ```
 
 ### Target Prefab Format (ECS-native)
 
 ```zon
-// prefabs/oven.zon (target)
-.{
-    .components = .{
-        .Position = .{ .x = 200, .y = 100 },
-        .Shape = .{ ... },
-        .Workstation = .{
-            .workstation_type = .kitchen,
-            .process_duration = 5,
-        },
-    },
-    .children = .{
-        .eis_flour = .{ .components = .{
-            .Position = .{ .x = -20, .y = 0 },
-            .Storage = .{ .accepted_items = .{ .food = true } },
+// prefabs/oven.zon (target) — same nesting structure, role split into marker
+.Workstation = .{
+    .workstation_type = .kitchen,
+    .process_duration = 5,
+    .storages = .{
+        .{ .components = .{
+            .Position = .{ .x = -60, .y = 80 },
+            .Storage = .{ .accepted_items = .{ .flour = true } },
             .EIS = .{},
+            .Shape = .{ ... },
         }},
-        .iis_flour = .{ .components = .{
-            .Position = .{ .x = -10, .y = 0 },
-            .Storage = .{ .accepted_items = .{ .food = true } },
+        .{ .components = .{
+            .Position = .{ .x = -50, .y = 0 },
+            .Storage = .{ .accepted_items = .{ .flour = true } },
             .IIS = .{},
+            .Shape = .{ ... },
         }},
-        .ios_bread = .{ .components = .{
-            .Position = .{ .x = 10, .y = 0 },
-            .Storage = .{ .accepted_items = .{ .food = true } },
+        .{ .components = .{
+            .Position = .{ .x = 50, .y = 15 },
+            .Storage = .{ .accepted_items = .{ .bread = true } },
             .IOS = .{},
+            .Shape = .{ ... },
         }},
-        .eos_bread = .{ .components = .{
-            .Position = .{ .x = 20, .y = 0 },
-            .Storage = .{ .accepted_items = .{ .food = true } },
+        .{ .components = .{
+            .Position = .{ .x = 100, .y = 15 },
+            .Storage = .{ .accepted_items = .{ .bread = true } },
             .EOS = .{},
+            .Shape = .{ ... },
         }},
     },
-}
+},
 ```
 
 Key differences:
-- Storage role is a separate marker component (`EIS`, `IIS`, `IOS`, `EOS`) instead of a `.role` field
-- `Storage.accepted_items` uses `EnumSet(ItemType)` instead of a single `accepts` value
+- Storage role is a separate marker component (`EIS`, `IIS`, `IOS`, `EOS`) instead of `Storage.role`
+- `Storage.accepted_items` uses `EnumSet(ItemType)` instead of a single `.accepts` value
 - `Workstation` gains `workstation_type` field
-- `StorageSlots` (the link from workstation to its storage entities) must be resolved at scene load time from the parent-child hierarchy
+- Prefab nesting structure (`Workstation.storages = .{ ... }`) is unchanged
 
 ### StorageSlots Resolution
 
-The `Workstation` component's `eis`, `iis`, `ios`, `eos` `StorageSlots` fields must be populated after the scene/prefab spawns the entity hierarchy. Two approaches:
+`Workstation` has runtime-only `StorageSlots` fields (`eis_slots`, `iis_slots`, `ios_slots`, `eos_slots`) that are not declared in prefabs. They are populated automatically via the engine's `onReady` callback (RFC #169).
 
-1. **Scene load hook**: after all entities are spawned, iterate workstation children and populate `StorageSlots` based on which role marker each child has. This runs once.
-2. **Prefab inline**: declare storage entity IDs directly in the prefab. This requires the prefab system to support forward entity references.
+The engine guarantees that when `Workstation.onReady` fires:
+1. All storage children are created
+2. The `storages: []const Entity` slice is populated
+3. Each child's `EIS.workstation`/`IIS.workstation`/etc. back-reference is auto-set from the parent
 
-Option 1 is simpler and doesn't require prefab system changes.
+```zig
+// Workstation component definition
+pub fn onReady(payload: engine.ComponentPayload) void {
+    const game = payload.getGame(MyGame);
+    const entity = engine.entityFromU64(payload.entity_id);
+    const reg = game.getRegistry();
+    const ws = reg.getComponent(entity, Workstation);
+
+    var eis = StorageSlots{};
+    var iis = StorageSlots{};
+    var ios = StorageSlots{};
+    var eos = StorageSlots{};
+
+    for (ws.storages) |child| {
+        if (reg.has(EIS, child)) eis.append(child);
+        if (reg.has(IIS, child)) iis.append(child);
+        if (reg.has(IOS, child)) ios.append(child);
+        if (reg.has(EOS, child)) eos.append(child);
+    }
+
+    ws.eis_slots = eis;
+    ws.iis_slots = iis;
+    ws.ios_slots = ios;
+    ws.eos_slots = eos;
+}
+```
+
+No init scripts needed. No engine changes required.
 
 ### Item Prefabs
 
@@ -153,11 +182,11 @@ Workers start idle. The scheduler picks them up on the first frame.
 
 ## 6.3 Open Questions
 
-1. **EOS→EIS transport**: should this be a scheduler-level task (explicit "restock" assignment) or happen naturally through the dangling item path (items removed from EOS become dangling, scheduler delivers to matching EIS)? The dangling path requires someone to first remove items from EOS.
+1. ~~**EOS→EIS transport**~~: **Resolved** — generalize `Delivering` with an optional `source_storage` field. The scheduler treats EOS items as available for relocation alongside dangling items. Destination can be any EIS or standalone storage. See [04-scheduler-and-delivery.md](04-scheduler-and-delivery.md) section 4.2.
 
-2. **StorageSlots population**: scene load hook (option 1) requires a one-time initialization script. Can this be integrated into the engine's prefab `onCreate` hook?
+2. ~~**StorageSlots population**~~: **Resolved** — use the engine's `onReady` callback (RFC #169). `Workstation.onReady` fires after all children are spawned and the `storages` slice is populated. It walks children, checks for `EIS`/`IIS`/`IOS`/`EOS` markers, and populates `StorageSlots`. No init script needed, no engine changes. The prefab structure stays almost identical to the current format — `Storage.role` is split into a separate marker component.
 
-3. **Movement ownership**: should `WorkerExecutionSystem` handle all movement (including interpolation), or should it only set destinations while a game-side script handles the actual position updates? The latter preserves the current separation of concerns.
+3. ~~**Movement ownership**~~: **Resolved** — the game-side movement script owns all position interpolation, hierarchy attach/detach, and arrival detection. When a worker arrives at a destination or a processing timer completes, the movement script adds `TaskComplete {}` to the worker. `TaskCompletionSystem` handles the state transition. `WorkerExecutionSystem` is eliminated — its responsibilities are split between the game movement script (movement, arrival, timers) and `TaskCompletionSystem` (state routing).
 
 ## 6.4 Risk Areas
 
