@@ -276,7 +276,9 @@ pub fn PathfinderWith(
             }
 
             self.fw = FloydWarshall.build(self.allocator, &self.graph) catch null;
-            self.graph.dirty = false;
+            if (self.fw != null) {
+                self.graph.dirty = false;
+            }
         }
 
         fn rebuildAndValidate(self: *Self, ctx: anytype) void {
