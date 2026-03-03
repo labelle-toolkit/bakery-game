@@ -106,9 +106,11 @@ pub fn PathfinderWith(
 
             // Get path as node IDs
             const node_path = try fw.getPath(self.allocator, from_node, to_node) orelse return null;
+            errdefer self.allocator.free(node_path);
 
             // Convert node IDs to world positions
             const positions = try self.allocator.alloc(Position, node_path.len);
+            errdefer self.allocator.free(positions);
             for (node_path, 0..) |node_id, i| {
                 positions[i] = self.graph.getPosition(node_id);
             }
