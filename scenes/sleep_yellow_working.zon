@@ -2,6 +2,8 @@
     .name = "sleep_yellow_working",
     .scripts = .{
         "task_initializer",
+        "pathfinder_bridge",
+        "navigation_orchestrator",
         "needs_manager",
         "worker_movement",
         "camera_control",

@@ -19,6 +19,8 @@ const Scene = engine.Scene;
 const Position = engine.render.Position;
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
+const navigation_intent_comp = @import("../components/navigation_intent.zig");
+const NavigationIntent = navigation_intent_comp.NavigationIntent;
 const Context = main.labelle_tasksContext;
 const BoundTypes = main.labelle_tasksBindItems;
 const Storage = BoundTypes.Storage;
@@ -55,8 +57,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     while (worker_iter.next()) |worker_entity| {
         const worker_id = engine.entityToU64(worker_entity);
 
-        // Skip if worker has a movement target (busy)
+        // Skip if worker has a movement target or navigation intent (busy)
         if (registry.tryGet(MovementTarget, worker_entity) != null) continue;
+        if (registry.tryGet(NavigationIntent, worker_entity) != null) continue;
 
         // Skip if worker is assigned to a workstation (task engine will handle)
         if (registry.tryGet(AssignedWorkstation, worker_entity) != null) continue;
@@ -146,12 +149,13 @@ fn tryAssignTransport(registry: anytype, worker_entity: anytype, worker_id: u64)
                     .to_storage = eis_id,
                 });
 
-                // Set worker movement target to EOS
+                // Set navigation intent to route worker to EOS
                 const pos = best_eos_pos.?;
-                registry.set(worker_entity, MovementTarget{
+                registry.set(worker_entity, NavigationIntent{
+                    .target_entity = best_eos_id,
+                    .action = .transport_pickup,
                     .target_x = pos.x,
                     .target_y = pos.y,
-                    .action = .transport_pickup,
                 });
 
                 // Tell the task engine this worker is busy so it won't be

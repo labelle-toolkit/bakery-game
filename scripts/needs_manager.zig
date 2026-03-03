@@ -22,6 +22,8 @@ const Scene = engine.Scene;
 const Position = engine.render.Position;
 const Color = engine.Color;
 const MovementTarget = movement_target.MovementTarget;
+const navigation_intent_comp = @import("../components/navigation_intent.zig");
+const NavigationIntent = navigation_intent_comp.NavigationIntent;
 const WorkProgress = work_progress.WorkProgress;
 const BoundTypes = main.labelle_tasksBindItems;
 const Worker = BoundTypes.Worker;
@@ -302,10 +304,11 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             // Call workerUnavailable BEFORE setting MovementTarget, because
             // workerUnavailable may trigger transport_cancelled which removes MovementTarget
             _ = TaskContext.workerUnavailable(wid);
-            registry.set(worker_entity, MovementTarget{
+            registry.set(worker_entity, NavigationIntent{
+                .target_entity = facility_id,
+                .action = .seek_bed,
                 .target_x = bed_pos.x,
                 .target_y = bed_pos.y,
-                .action = .seek_bed,
             });
         }
 
@@ -347,10 +350,11 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             // Call workerUnavailable BEFORE setting MovementTarget, because
             // workerUnavailable may trigger transport_cancelled which removes MovementTarget
             _ = TaskContext.workerUnavailable(wid);
-            registry.set(worker_entity, MovementTarget{
+            registry.set(worker_entity, NavigationIntent{
+                .target_entity = storage_id,
+                .action = .seek_water,
                 .target_x = storage_pos.x,
                 .target_y = storage_pos.y,
-                .action = .seek_water,
             });
         }
 

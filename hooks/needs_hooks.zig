@@ -20,6 +20,8 @@ const main = @import("../main.zig");
 const Locked = labelle_needs.Locked;
 
 const MovementTarget = movement_target.MovementTarget;
+const navigation_intent_comp = @import("../components/navigation_intent.zig");
+const NavigationIntent = navigation_intent_comp.NavigationIntent;
 const WorkProgress = work_progress.WorkProgress;
 const Position = engine.render.Position;
 const Game = engine.Game;
@@ -90,10 +92,11 @@ pub const NeedsGameHooks = struct {
         // workerUnavailable may trigger transport_cancelled which removes MovementTarget
         _ = TaskContext.workerUnavailable(payload.worker_id);
 
-        registry.set(worker_entity, MovementTarget{
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.facility_id,
+            .action = .seek_bed,
             .target_x = bed_pos.x,
             .target_y = bed_pos.y,
-            .action = .seek_bed,
         });
     }
 
@@ -232,10 +235,11 @@ pub const NeedsGameHooks = struct {
         // workerUnavailable may trigger transport_cancelled which removes MovementTarget
         _ = TaskContext.workerUnavailable(payload.worker_id);
 
-        registry.set(worker_entity, MovementTarget{
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.storage_id,
+            .action = .seek_water,
             .target_x = storage_pos.x,
             .target_y = storage_pos.y,
-            .action = .seek_water,
         });
     }
 

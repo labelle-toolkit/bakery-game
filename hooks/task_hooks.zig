@@ -23,6 +23,9 @@ const bread_prefab = @import("../prefabs/bread.zon");
 
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
+const navigation_intent_comp = @import("../components/navigation_intent.zig");
+const NavigationIntent = navigation_intent_comp.NavigationIntent;
+const navigation_orchestrator = @import("../scripts/navigation_orchestrator.zig");
 const WorkProgress = work_progress.WorkProgress;
 const StoredItem = main.StoredItem;
 const CarriedItem = main.CarriedItem;
@@ -73,11 +76,12 @@ pub const GameHooks = struct {
         // Mark worker as pending arrival (don't start work until they arrive)
         registry.set(worker_entity, PendingArrival{});
 
-        // Set MovementTarget to move worker to workstation
-        registry.set(worker_entity, MovementTarget{
+        // Set NavigationIntent to route worker to workstation via pathfinder
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.workstation_id,
+            .action = .arrive_at_workstation,
             .target_x = ws_pos.x,
             .target_y = ws_pos.y,
-            .action = .arrive_at_workstation,
         });
 
         log.info("worker_assigned: worker {d} moving to workstation {d} at ({d},{d})", .{
@@ -131,15 +135,16 @@ pub const GameHooks = struct {
         const target_pos = registry.tryGet(Position, target_entity) orelse return;
 
         const worker_entity = engine.entityFromU64(payload.worker_id);
-        log.info("movement_started: setting MovementTarget for worker to workstation {d} at ({d},{d})", .{
+        log.info("movement_started: setting NavigationIntent for worker to workstation {d} at ({d},{d})", .{
             payload.target,
             target_pos.x,
             target_pos.y,
         });
-        registry.set(worker_entity, MovementTarget{
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.target,
+            .action = .arrive_at_workstation,
             .target_x = target_pos.x,
             .target_y = target_pos.y,
-            .action = .arrive_at_workstation,
         });
     }
 
@@ -171,13 +176,14 @@ pub const GameHooks = struct {
         registry.set(worker_entity, PickupSource{ .storage_id = payload.storage_id });
         log.info("pickup_started: tracking worker {d} picking from storage {d}", .{ payload.worker_id, payload.storage_id });
 
-        registry.set(worker_entity, MovementTarget{
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.storage_id,
+            .action = .pickup,
             .target_x = storage_pos.x,
             .target_y = storage_pos.y,
-            .action = .pickup,
         });
 
-        log.info("pickup_started: set MovementTarget for worker {d} to ({d},{d})", .{
+        log.info("pickup_started: set NavigationIntent for worker {d} to ({d},{d})", .{
             payload.worker_id,
             storage_pos.x,
             storage_pos.y,
@@ -213,10 +219,11 @@ pub const GameHooks = struct {
                 eis_pos.y,
             });
 
-            registry.set(worker_entity, MovementTarget{
+            registry.set(worker_entity, NavigationIntent{
+                .target_entity = payload.storage_id,
+                .action = .store,
                 .target_x = eis_pos.x,
                 .target_y = eis_pos.y,
-                .action = .store,
             });
             return;
         }
@@ -250,10 +257,11 @@ pub const GameHooks = struct {
                 });
 
                 // Move worker to IOS to pick up the bread
-                registry.set(worker_entity, MovementTarget{
+                registry.set(worker_entity, NavigationIntent{
+                    .target_entity = engine.entityToU64(storage_entity),
+                    .action = .pickup_from_ios,
                     .target_x = ios_pos.x,
                     .target_y = ios_pos.y,
-                    .action = .pickup_from_ios,
                 });
                 return;
             }
@@ -285,11 +293,12 @@ pub const GameHooks = struct {
             // Still track the worker->item mapping even without item type info
             const worker_entity = engine.entityFromU64(payload.worker_id);
             registry.set(worker_entity, CarriedItem{ .item_entity = payload.item_id });
-            // Set MovementTarget anyway
-            registry.set(worker_entity, MovementTarget{
+            // Set NavigationIntent anyway
+            registry.set(worker_entity, NavigationIntent{
+                .target_entity = payload.item_id,
+                .action = .pickup_dangling,
                 .target_x = item_pos.x,
                 .target_y = item_pos.y,
-                .action = .pickup_dangling,
             });
             return;
         };
@@ -322,11 +331,12 @@ pub const GameHooks = struct {
             log.err("pickup_dangling_started: no EIS found for item type {s}", .{@tagName(dangling_item.item_type)});
         }
 
-        // Set MovementTarget component on the worker
-        registry.set(worker_entity, MovementTarget{
+        // Set NavigationIntent component on the worker
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.item_id,
+            .action = .pickup_dangling,
             .target_x = item_pos.x,
             .target_y = item_pos.y,
-            .action = .pickup_dangling,
         });
     }
 
@@ -345,10 +355,11 @@ pub const GameHooks = struct {
         const from_entity = engine.entityFromU64(payload.from_storage_id);
         const from_pos = registry.tryGet(Position, from_entity) orelse return;
 
-        registry.set(worker_entity, MovementTarget{
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.from_storage_id,
+            .action = .transport_pickup,
             .target_x = from_pos.x,
             .target_y = from_pos.y,
-            .action = .transport_pickup,
         });
 
         log.info("transport_started: worker={d} from={d} to={d} item={s}", .{
@@ -373,14 +384,18 @@ pub const GameHooks = struct {
             });
         }
 
+        // Cancel any active navigation before rerouting
+        navigation_orchestrator.cancelNavigation(registry, worker_entity, payload.worker_id);
+
         // Redirect worker to new destination
         const dest_entity = engine.entityFromU64(payload.to_storage_id);
         const dest_pos = registry.tryGet(Position, dest_entity) orelse return;
 
-        registry.set(worker_entity, MovementTarget{
+        registry.set(worker_entity, NavigationIntent{
+            .target_entity = payload.to_storage_id,
+            .action = .transport_deliver,
             .target_x = dest_pos.x,
             .target_y = dest_pos.y,
-            .action = .transport_deliver,
         });
 
         log.info("transport_rerouted: worker={d} new_dest={d} item={s}", .{
@@ -404,10 +419,8 @@ pub const GameHooks = struct {
             registry.remove(CarriedItem, worker_entity);
         }
 
-        // Remove movement target so worker stops (if it has one)
-        if (registry.tryGet(MovementTarget, worker_entity) != null) {
-            registry.remove(MovementTarget, worker_entity);
-        }
+        // Cancel any active navigation (removes NavigationIntent and MovementTarget)
+        navigation_orchestrator.cancelNavigation(registry, worker_entity, payload.worker_id);
 
         log.info("transport_cancelled: worker={d} from={d} to={d}", .{
             payload.worker_id,
