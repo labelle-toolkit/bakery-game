@@ -1,13 +1,13 @@
 const types = @import("types.zig");
 const NodeId = types.NodeId;
-const Vec2 = types.Vec2;
+const Position = types.Position;
 
 /// Component set on an entity while it is navigating.
 /// Managed internally by the pathfinder — the game reads it but
 /// may modify `speed` at runtime (e.g. slow down when carrying heavy items).
 pub const MovementPath = struct {
     /// Full sequence of world positions from start to goal.
-    positions: []const Vec2,
+    positions: []const Position,
     /// Index of the waypoint the entity is currently moving toward.
     current_index: u32 = 0,
     /// Total number of waypoints.

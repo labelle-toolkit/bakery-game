@@ -7,8 +7,9 @@ pub const engine = @import("engine.zig");
 
 // Core types
 pub const NodeId = types.NodeId;
-pub const Vec2 = types.Vec2;
+pub const Position = types.Position;
 pub const INF = types.INF;
+pub const distanceBetween = types.distanceBetween;
 
 // Graph
 pub const Graph = graph.Graph;

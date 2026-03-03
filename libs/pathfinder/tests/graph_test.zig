@@ -3,7 +3,6 @@ const pathfinder = @import("pathfinder");
 
 const Graph = pathfinder.Graph;
 const Config = pathfinder.Config;
-const Vec2 = pathfinder.Vec2;
 
 const test_config = Config{
     .max_connection_distance = 200.0,

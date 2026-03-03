@@ -3,7 +3,7 @@ const pathfinder = @import("pathfinder");
 
 const PathfinderWith = pathfinder.PathfinderWith;
 const Config = pathfinder.Config;
-const Vec2 = pathfinder.Vec2;
+const Position = @import("labelle-core").Position;
 
 const test_config = Config{
     .max_connection_distance = 200.0,
@@ -13,7 +13,7 @@ const test_config = Config{
 
 /// Mock game context for testing
 const MockCtx = struct {
-    positions: std.AutoHashMap(u64, Vec2),
+    positions: std.AutoHashMap(u64, Position),
     move_calls: std.ArrayListUnmanaged(MoveCall) = .{},
     allocator: std.mem.Allocator,
 
@@ -25,7 +25,7 @@ const MockCtx = struct {
 
     fn init(allocator: std.mem.Allocator) MockCtx {
         return .{
-            .positions = std.AutoHashMap(u64, Vec2).init(allocator),
+            .positions = std.AutoHashMap(u64, Position).init(allocator),
             .allocator = allocator,
         };
     }
@@ -35,7 +35,7 @@ const MockCtx = struct {
         self.move_calls.deinit(self.allocator);
     }
 
-    pub fn getEntityPosition(self: *MockCtx, entity: u64) ?Vec2 {
+    pub fn getEntityPosition(self: *MockCtx, entity: u64) ?Position {
         return self.positions.get(entity);
     }
 

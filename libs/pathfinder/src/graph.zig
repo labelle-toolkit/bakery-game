@@ -2,7 +2,8 @@ const std = @import("std");
 const types = @import("types.zig");
 
 const NodeId = types.NodeId;
-const Vec2 = types.Vec2;
+const Position = types.Position;
+const distanceBetween = types.distanceBetween;
 const Allocator = std.mem.Allocator;
 
 pub const Config = struct {
@@ -21,7 +22,7 @@ const EdgeList = std.ArrayListUnmanaged(Edge);
 pub const Graph = struct {
     allocator: Allocator,
     /// Node positions indexed by NodeId.
-    positions: std.ArrayListUnmanaged(Vec2) = .{},
+    positions: std.ArrayListUnmanaged(Position) = .{},
     /// Whether each node is a stair node.
     is_stair: std.ArrayListUnmanaged(bool) = .{},
     /// Whether each node has been removed (tombstone).
@@ -55,7 +56,7 @@ pub const Graph = struct {
     /// If is_stair=true, also auto-connects to existing stair nodes on the same Y axis
     /// within max_stair_distance.
     /// Sets dirty = true.
-    pub fn addNode(self: *Graph, position: Vec2, stair: bool) !NodeId {
+    pub fn addNode(self: *Graph, position: Position, stair: bool) !NodeId {
         const new_id: NodeId = @intCast(self.positions.items.len);
 
         try self.positions.append(self.allocator, position);
@@ -80,7 +81,7 @@ pub const Graph = struct {
     /// Find nearest neighbors on the given axis and create bidirectional edges.
     /// For X axis: connects to nearest above (higher Y) and below (lower Y).
     /// For Y axis: connects to nearest left (lower X) and right (higher X), stair nodes only.
-    fn autoConnectAxis(self: *Graph, new_id: NodeId, position: Vec2, comptime axis: Axis) !void {
+    fn autoConnectAxis(self: *Graph, new_id: NodeId, position: Position, comptime axis: Axis) !void {
         const axis_val = switch (axis) {
             .x => position.x,
             .y => position.y,
@@ -119,7 +120,7 @@ pub const Graph = struct {
             // Check same axis (within tolerance)
             if (@abs(other_axis_val - axis_val) > self.config.axis_tolerance) continue;
 
-            const dist = position.distanceTo(other_pos);
+            const dist = distanceBetween(position, other_pos);
             if (dist > max_dist) continue;
 
             // Classify as positive or negative direction on perpendicular axis
@@ -209,7 +210,7 @@ pub const Graph = struct {
     }
 
     /// Get the world position of a node.
-    pub fn getPosition(self: *const Graph, node_id: NodeId) Vec2 {
+    pub fn getPosition(self: *const Graph, node_id: NodeId) Position {
         return self.positions.items[node_id];
     }
 

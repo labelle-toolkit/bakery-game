@@ -6,7 +6,7 @@ const hooks_mod = @import("hooks.zig");
 const mp_mod = @import("movement_path.zig");
 
 const NodeId = types.NodeId;
-const Vec2 = types.Vec2;
+const Position = types.Position;
 const INF = types.INF;
 const Graph = graph_mod.Graph;
 const Config = graph_mod.Config;
@@ -73,7 +73,7 @@ pub fn PathfinderWith(
 
         /// Register a node. Auto-connects to nearest axis-aligned neighbors.
         /// Does NOT trigger a rebuild — just marks dirty.
-        pub fn addNode(self: *Self, position: Vec2, is_stair: bool) !NodeId {
+        pub fn addNode(self: *Self, position: Position, is_stair: bool) !NodeId {
             return self.graph.addNode(position, is_stair);
         }
 
@@ -87,7 +87,7 @@ pub fn PathfinderWith(
         /// Compute the shortest path and start moving the entity.
         ///
         /// `ctx` must provide:
-        /// - `getEntityPosition(entity_id: GameId) ?Vec2`
+        /// - `getEntityPosition(entity_id: GameId) ?Position`
         ///
         /// If a path exists, stores a MovementPath internally and returns a pointer to it.
         /// If no path exists, returns null.
@@ -108,7 +108,7 @@ pub fn PathfinderWith(
             defer self.allocator.free(node_path);
 
             // Convert node IDs to world positions
-            const positions = try self.allocator.alloc(Vec2, node_path.len);
+            const positions = try self.allocator.alloc(Position, node_path.len);
             for (node_path, 0..) |node_id, i| {
                 positions[i] = self.graph.getPosition(node_id);
             }
@@ -151,7 +151,7 @@ pub fn PathfinderWith(
         ///
         /// `ctx` must provide:
         /// - `moveEntity(entity_id: GameId, dx: f32, dy: f32) void`
-        /// - `getEntityPosition(entity_id: GameId) ?Vec2`
+        /// - `getEntityPosition(entity_id: GameId) ?Position`
         ///
         /// Handles movement interpolation, waypoint advancement, arrival detection,
         /// and path re-validation on graph changes. Fires hooks for arrivals and
@@ -245,7 +245,7 @@ pub fn PathfinderWith(
         }
 
         /// Get the world position of a node.
-        pub fn nodePosition(self: *Self, node_id: NodeId) Vec2 {
+        pub fn nodePosition(self: *Self, node_id: NodeId) Position {
             return self.graph.getPosition(node_id);
         }
 

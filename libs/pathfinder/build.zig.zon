@@ -3,7 +3,12 @@
     .name = .pathfinder,
     .version = "0.1.0",
     .minimum_zig_version = "0.15.2",
-    .dependencies = .{},
+    .dependencies = .{
+        .@"labelle-core" = .{
+            .url = "https://github.com/labelle-toolkit/labelle-core/archive/refs/tags/v0.2.0.tar.gz",
+            .hash = "labelle_core-0.2.0-CcnR4HNtAACCCNxF1p5Jg1Ia1Q2aGmEKkB1k2ztrIv8S",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",
