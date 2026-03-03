@@ -57,9 +57,10 @@ pub fn PathfinderWith(
         }
 
         pub fn deinit(self: *Self) void {
-            // Free all active path position arrays
+            // Free all active path position and node_path arrays
             for (self.active.values()) |*entry| {
                 self.allocator.free(entry.path.positions);
+                self.allocator.free(entry.path.node_path);
             }
             self.active.deinit();
 
@@ -105,7 +106,6 @@ pub fn PathfinderWith(
 
             // Get path as node IDs
             const node_path = try fw.getPath(self.allocator, from_node, to_node) orelse return null;
-            defer self.allocator.free(node_path);
 
             // Convert node IDs to world positions
             const positions = try self.allocator.alloc(Position, node_path.len);
@@ -116,6 +116,7 @@ pub fn PathfinderWith(
             // Cancel any existing navigation for this entity
             if (self.active.getPtr(entity)) |existing| {
                 self.allocator.free(existing.path.positions);
+                self.allocator.free(existing.path.node_path);
             }
 
             // Start at index 1 — index 0 is the start node the entity is already at.
@@ -126,6 +127,7 @@ pub fn PathfinderWith(
             const entry = NavigationEntry{
                 .path = .{
                     .positions = positions,
+                    .node_path = node_path,
                     .current_index = start_idx,
                     .len = @intCast(positions.len),
                     .speed = speed,
@@ -142,6 +144,7 @@ pub fn PathfinderWith(
         pub fn cancel(self: *Self, entity: GameId) void {
             if (self.active.fetchSwapRemove(entity)) |kv| {
                 self.allocator.free(kv.value.path.positions);
+                self.allocator.free(kv.value.path.node_path);
             }
         }
 
@@ -221,6 +224,7 @@ pub fn PathfinderWith(
             for (arrived_buf[0..arrived_count]) |entity| {
                 const entry = self.active.fetchSwapRemove(entity) orelse continue;
                 self.allocator.free(entry.value.path.positions);
+                self.allocator.free(entry.value.path.node_path);
 
                 dispatchHook(GameHooks, .{ .arrived = .{
                     .entity = entity,
@@ -280,27 +284,38 @@ pub fn PathfinderWith(
 
             const fw = self.fw orelse return;
 
-            // Re-validate active paths
+            // Re-validate active paths against the rebuilt graph
             var invalidated_buf: [64]GameId = undefined;
             var invalidated_count: usize = 0;
 
             for (self.active.keys(), self.active.values()) |entity, *entry| {
                 const path = &entry.path;
 
-                // Find current node (nearest waypoint the entity has reached)
-                const current_node_idx: u32 = if (path.current_index > 0) path.current_index - 1 else 0;
-                _ = current_node_idx;
+                // Determine entity's current node from the stored node_path
+                const current_node_pos: u32 = if (path.current_index > 0) path.current_index - 1 else 0;
 
-                // Check if the goal is still reachable from the entity's area
-                // Use the first waypoint's position to find nearest node
-                if (fw.getDistance(0, path.goal_node) == INF and path.goal_node != 0) {
-                    // Path may be broken — check more carefully
-                    // For now, invalidate if goal node was removed
-                    if (self.graph.isRemoved(path.goal_node)) {
-                        if (invalidated_count < invalidated_buf.len) {
-                            invalidated_buf[invalidated_count] = entity;
-                            invalidated_count += 1;
-                        }
+                // Check remaining path for removed nodes
+                var broken = false;
+                var i: u32 = current_node_pos;
+                while (i < path.node_path.len) : (i += 1) {
+                    if (self.graph.isRemoved(path.node_path[i])) {
+                        broken = true;
+                        break;
+                    }
+                }
+
+                // Check if goal is still reachable from entity's current node
+                if (!broken and current_node_pos < path.node_path.len) {
+                    const current_node = path.node_path[current_node_pos];
+                    if (fw.getDistance(current_node, path.goal_node) == INF) {
+                        broken = true;
+                    }
+                }
+
+                if (broken) {
+                    if (invalidated_count < invalidated_buf.len) {
+                        invalidated_buf[invalidated_count] = entity;
+                        invalidated_count += 1;
                     }
                 }
             }
@@ -308,12 +323,22 @@ pub fn PathfinderWith(
             // Process invalidations
             for (invalidated_buf[0..invalidated_count]) |entity| {
                 const entry = self.active.fetchSwapRemove(entity) orelse continue;
-                self.allocator.free(entry.value.path.positions);
+                const path = &entry.value.path;
+
+                // Determine entity's current node for the hook payload
+                const current_node_pos: u32 = if (path.current_index > 0) path.current_index - 1 else 0;
+                const current_node: NodeId = if (current_node_pos < path.node_path.len)
+                    path.node_path[current_node_pos]
+                else
+                    path.goal_node;
+
+                self.allocator.free(path.positions);
+                self.allocator.free(path.node_path);
 
                 dispatchHook(GameHooks, .{ .path_invalidated = .{
                     .entity = entity,
-                    .goal_node = entry.value.path.goal_node,
-                    .current_node = 0, // approximation
+                    .goal_node = path.goal_node,
+                    .current_node = current_node,
                     .registry = null,
                 } });
             }

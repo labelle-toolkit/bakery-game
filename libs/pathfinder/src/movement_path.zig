@@ -8,6 +8,8 @@ const Position = types.Position;
 pub const MovementPath = struct {
     /// Full sequence of world positions from start to goal.
     positions: []const Position,
+    /// Node IDs corresponding to each position (for path re-validation).
+    node_path: []const NodeId,
     /// Index of the waypoint the entity is currently moving toward.
     current_index: u32 = 0,
     /// Total number of waypoints.

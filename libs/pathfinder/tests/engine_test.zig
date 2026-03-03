@@ -169,3 +169,95 @@ test "hook fires on arrival" {
     try std.testing.expectEqual(@as(?u32, 1), TestHooks.arrived_goal);
     try std.testing.expect(!pf.isNavigating(42));
 }
+
+test "path_invalidated fires when mid-path node is removed" {
+    const TestHooks = struct {
+        var invalidated_entity: ?u64 = null;
+        var invalidated_goal: ?u32 = null;
+        var invalidated_current: ?u32 = null;
+
+        pub fn path_invalidated(payload: anytype) void {
+            invalidated_entity = payload.entity;
+            invalidated_goal = payload.goal_node;
+            invalidated_current = payload.current_node;
+        }
+
+        fn reset() void {
+            invalidated_entity = null;
+            invalidated_goal = null;
+            invalidated_current = null;
+        }
+    };
+
+    const Pf = PathfinderWith(u64, TestHooks);
+    var pf = Pf.init(std.testing.allocator, test_config);
+    defer pf.deinit();
+
+    // A(100,100) -- B(100,200) -- C(100,300) on same X axis
+    _ = try pf.addNode(.{ .x = 100, .y = 100 }, false); // node 0
+    _ = try pf.addNode(.{ .x = 100, .y = 200 }, false); // node 1
+    _ = try pf.addNode(.{ .x = 100, .y = 300 }, false); // node 2
+
+    var ctx = MockCtx.init(std.testing.allocator);
+    defer ctx.deinit();
+    try ctx.positions.put(42, .{ .x = 100, .y = 100 });
+
+    // Navigate from node 0 to node 2 (path: 0 → 1 → 2)
+    _ = try pf.navigate(42, 0, 2, 100.0);
+    try std.testing.expect(pf.isNavigating(42));
+
+    TestHooks.reset();
+
+    // Remove middle node — this breaks the path
+    pf.removeNode(1);
+
+    // Tick triggers rebuild + validation
+    pf.tick(&ctx, 0.016);
+
+    // Hook should have fired with correct entity and goal
+    try std.testing.expectEqual(@as(?u64, 42), TestHooks.invalidated_entity);
+    try std.testing.expectEqual(@as(?u32, 2), TestHooks.invalidated_goal);
+    // Entity should no longer be navigating
+    try std.testing.expect(!pf.isNavigating(42));
+}
+
+test "path_invalidated fires when edge is broken by graph change" {
+    const TestHooks = struct {
+        var invalidated_entity: ?u64 = null;
+
+        pub fn path_invalidated(payload: anytype) void {
+            invalidated_entity = payload.entity;
+        }
+
+        fn reset() void {
+            invalidated_entity = null;
+        }
+    };
+
+    const Pf = PathfinderWith(u64, TestHooks);
+    var pf = Pf.init(std.testing.allocator, test_config);
+    defer pf.deinit();
+
+    // Three nodes: A(100,100) -- B(100,200) -- C(100,300)
+    _ = try pf.addNode(.{ .x = 100, .y = 100 }, false); // node 0
+    _ = try pf.addNode(.{ .x = 100, .y = 200 }, false); // node 1
+    _ = try pf.addNode(.{ .x = 100, .y = 300 }, false); // node 2
+
+    var ctx = MockCtx.init(std.testing.allocator);
+    defer ctx.deinit();
+    try ctx.positions.put(10, .{ .x = 100, .y = 100 });
+
+    // Navigate from 0 to 2
+    _ = try pf.navigate(10, 0, 2, 100.0);
+    try std.testing.expect(pf.isNavigating(10));
+
+    TestHooks.reset();
+
+    // Remove goal node — path is broken
+    pf.removeNode(2);
+
+    pf.tick(&ctx, 0.016);
+
+    try std.testing.expectEqual(@as(?u64, 10), TestHooks.invalidated_entity);
+    try std.testing.expect(!pf.isNavigating(10));
+}

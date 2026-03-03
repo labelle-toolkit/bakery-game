@@ -90,11 +90,15 @@ pub const FloydWarshall = struct {
         if (self.next[idx(self, start, goal)] == null) return null;
 
         var path_list = std.ArrayListUnmanaged(NodeId){};
+        errdefer path_list.deinit(allocator);
         var current = start;
         try path_list.append(allocator, current);
 
         while (current != goal) {
-            current = self.next[idx(self, current, goal)] orelse return null;
+            current = self.next[idx(self, current, goal)] orelse {
+                path_list.deinit(allocator);
+                return null;
+            };
             try path_list.append(allocator, current);
         }
 
