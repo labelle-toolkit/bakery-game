@@ -507,30 +507,47 @@ fn advanceStore(game: *Game, registry: anytype, worker_entity: Entity, worker_id
 }
 
 fn finishCycle(registry: anytype, worker_entity: Entity, worker_id: u64, wo: *WorkingOn, ws: *const Workstation) void {
+    const ws_entity = engine.entityFromU64(wo.workstation_id);
+    const ws_pos = registry.tryGet(Position, ws_entity);
+
     // Check if workstation can run another cycle
     if (ws.isProducer() and hasEmptyEos(registry, ws)) {
-        // Producer with empty EOS: restart at process
+        // Producer with empty EOS: walk back to workstation, then restart at process
         wo.step = .process;
         wo.source = null;
         wo.dest = null;
         wo.item = null;
+        if (ws_pos) |pos| {
+            registry.add(worker_entity, MovementTarget{
+                .target_x = pos.x,
+                .target_y = pos.y,
+                .speed = 120.0,
+                .action = .arrive_at_workstation,
+            });
+        }
         std.log.info("[ProductionSystem] Worker {d}: producer cycle restart", .{worker_id});
         return;
     }
 
-    if (!ws.isProducer() and allEisFilled(registry, ws)) {
-        // Non-producer with all EIS filled: restart at pickup
+    if (!ws.isProducer() and allEisFilled(registry, ws) and hasEmptyEos(registry, ws)) {
+        // Non-producer with all EIS filled and empty EOS: walk back, then restart at pickup
         wo.step = .pickup;
         wo.source = null;
         wo.dest = null;
         wo.item = null;
+        if (ws_pos) |pos| {
+            registry.add(worker_entity, MovementTarget{
+                .target_x = pos.x,
+                .target_y = pos.y,
+                .speed = 120.0,
+                .action = .arrive_at_workstation,
+            });
+        }
         std.log.info("[ProductionSystem] Worker {d}: non-producer cycle restart", .{worker_id});
         return;
     }
 
     // Release worker
-    const ws_entity = engine.entityFromU64(wo.workstation_id);
-
     registry.remove(WorkingOn, worker_entity);
     if (registry.tryGet(Locked, worker_entity) != null) {
         registry.remove(Locked, worker_entity);

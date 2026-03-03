@@ -41,6 +41,11 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
     // Move entities that have a MovementTarget
     {
+        // Collect arrived entities to avoid iterator invalidation on remove
+        const Entity = engine.Entity;
+        var arrived_buf: [32]Entity = undefined;
+        var arrived_count: usize = 0;
+
         var view = registry.view(.{ MovementTarget, Position });
         var iter = view.entityIterator();
 
@@ -53,14 +58,27 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
             const dist = @sqrt(dx * dx + dy * dy);
 
             if (dist < 5.0) {
-                // Arrived at target — remove MovementTarget
-                registry.remove(MovementTarget, entity);
+                // Mark as arrived — remove after iteration
+                if (arrived_count < arrived_buf.len) {
+                    arrived_buf[arrived_count] = entity;
+                    arrived_count += 1;
+                }
             } else {
                 // Move towards target
                 const move_dist = @min(target.speed * dt, dist);
                 const move_x = (dx / dist) * move_dist;
                 const move_y = (dy / dist) * move_dist;
                 game.pos.moveLocalPosition(entity, move_x, move_y);
+            }
+        }
+
+        // Remove MovementTarget from arrived entities
+        for (arrived_buf[0..arrived_count]) |entity| {
+            if (registry.tryGet(MovementTarget, entity)) |target| {
+                std.log.info("[WorkerMovement] Entity {d} arrived (action={})", .{
+                    engine.entityToU64(entity), target.action,
+                });
+                registry.remove(MovementTarget, entity);
             }
         }
     }
