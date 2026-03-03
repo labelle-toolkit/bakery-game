@@ -17,6 +17,8 @@ const Position = engine.render.Position;
 const Context = main.labelle_tasksContext;
 const MovementTarget = movement_target.MovementTarget;
 const Action = movement_target.Action;
+const navigation_intent_comp = @import("../components/navigation_intent.zig");
+const NavigationIntent = navigation_intent_comp.NavigationIntent;
 const WorkProgress = work_progress.WorkProgress;
 const StoredItem = main.StoredItem;
 const CarriedItem = main.CarriedItem;
@@ -279,11 +281,13 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                 worker_id, eis_storage_id, iis_id, iis_pos.x, iis_pos.y,
                             });
 
-                            // Set new target to IIS
-                            registry.set(entity, MovementTarget{
+                            // Set navigation to IIS
+                            registry.remove(MovementTarget, entity);
+                            registry.set(entity, NavigationIntent{
+                                .target_entity = iis_id,
+                                .action = .deliver_to_iis,
                                 .target_x = iis_pos.x,
                                 .target_y = iis_pos.y,
-                                .action = .deliver_to_iis,
                             });
                             found_iis = true;
                             break;
@@ -352,7 +356,9 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                     _ = Context.pickupCompleted(worker_id);
 
                     // Check if worker still needs to go to workstation after pickups complete
-                    if (registry.tryGet(MovementTarget, entity) == null) {
+                    if (registry.tryGet(MovementTarget, entity) == null and
+                        registry.tryGet(NavigationIntent, entity) == null)
+                    {
                         // No new pickup target - check if worker is pending arrival at workstation
                         if (registry.tryGet(PendingArrival, entity) != null) {
                             // Get workstation position and redirect worker there
@@ -362,10 +368,11 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                     std.log.info("[WorkerMovement] deliver_to_iis: pickups complete, worker {d} moving to workstation {d} at ({d},{d})", .{
                                         worker_id, aw.workstation_id, ws_pos.x, ws_pos.y,
                                     });
-                                    registry.set(entity, MovementTarget{
+                                    registry.set(entity, NavigationIntent{
+                                        .target_entity = aw.workstation_id,
+                                        .action = .arrive_at_workstation,
                                         .target_x = ws_pos.x,
                                         .target_y = ws_pos.y,
-                                        .action = .arrive_at_workstation,
                                     });
                                 }
                             }
@@ -432,11 +439,13 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                         worker_id, dest_id, dest_pos.x, dest_pos.y,
                     });
 
-                    // Set target to destination with transport_deliver action
-                    registry.set(entity, MovementTarget{
+                    // Set navigation to destination with transport_deliver action
+                    registry.remove(MovementTarget, entity);
+                    registry.set(entity, NavigationIntent{
+                        .target_entity = dest_id,
+                        .action = .transport_deliver,
                         .target_x = dest_pos.x,
                         .target_y = dest_pos.y,
-                        .action = .transport_deliver,
                     });
                 },
                 .transport_deliver => {
@@ -571,11 +580,13 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
                                 worker_id, eos_id, eos_pos.x, eos_pos.y,
                             });
 
-                            // Set target to EOS
-                            registry.set(entity, MovementTarget{
+                            // Set navigation to EOS
+                            registry.remove(MovementTarget, entity);
+                            registry.set(entity, NavigationIntent{
+                                .target_entity = eos_id,
+                                .action = .store,
                                 .target_x = eos_pos.x,
                                 .target_y = eos_pos.y,
-                                .action = .store,
                             });
                             found_ios = true;
                             break;
@@ -637,7 +648,12 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
 
             // Only remove MovementTarget if no new target was set by hooks
             if (!skip_target_check) {
-                if (registry.tryGet(MovementTarget, entity)) |new_target| {
+                if (registry.tryGet(NavigationIntent, entity) != null) {
+                    // Hook set NavigationIntent — orchestrator handles from here
+                    if (registry.tryGet(MovementTarget, entity) != null) {
+                        registry.remove(MovementTarget, entity);
+                    }
+                } else if (registry.tryGet(MovementTarget, entity)) |new_target| {
                     std.log.info("[WorkerMovement] After action, checking target: old=({d},{d}) new=({d},{d})", .{
                         old_target_x,
                         old_target_y,
