@@ -221,6 +221,85 @@ test "path_invalidated fires when mid-path node is removed" {
     try std.testing.expect(!pf.isNavigating(42));
 }
 
+test "navigate works after node removal creates tombstone" {
+    const Pf = PathfinderWith(u64, NoHooks);
+    var pf = Pf.init(std.testing.allocator, test_config);
+    defer pf.deinit();
+
+    // A(100,100) -- B(100,200) -- C(100,300) -- D(100,400)
+    _ = try pf.addNode(.{ .x = 100, .y = 100 }, false); // node 0
+    _ = try pf.addNode(.{ .x = 100, .y = 200 }, false); // node 1
+    _ = try pf.addNode(.{ .x = 100, .y = 300 }, false); // node 2
+    _ = try pf.addNode(.{ .x = 100, .y = 400 }, false); // node 3
+
+    // Remove node 1 — creates tombstone. node IDs 0,2,3 remain valid.
+    // nodeCount() = 3, totalSlots() = 4. Node 3 has ID >= nodeCount().
+    pf.removeNode(1);
+
+    // Navigate from node 2 to node 3 — should still work (they're connected)
+    const path = try pf.navigate(42, 2, 3, 100.0);
+    try std.testing.expect(path != null);
+    try std.testing.expectEqual(@as(u32, 2), path.?.len);
+
+    // Navigate from node 0 to node 3 — should fail (node 1 was the bridge)
+    const no_path = try pf.navigate(43, 0, 3, 100.0);
+    try std.testing.expect(no_path == null);
+
+    // Verify node 3 (ID=3) is reachable from node 2 — exercises
+    // the case where node_id (3) >= nodeCount() (3) but < totalSlots() (4)
+    try std.testing.expect(pf.isReachable(2, 3));
+}
+
+test "rebuild after graph mutation produces correct results" {
+    const Pf = PathfinderWith(u64, NoHooks);
+    var pf = Pf.init(std.testing.allocator, test_config);
+    defer pf.deinit();
+
+    // Build initial graph: A -- B
+    _ = try pf.addNode(.{ .x = 100, .y = 100 }, false); // node 0
+    _ = try pf.addNode(.{ .x = 100, .y = 200 }, false); // node 1
+
+    // Force a build by querying
+    try std.testing.expect(pf.isReachable(0, 1));
+
+    // Mutate the graph (marks dirty again) — add node 2
+    _ = try pf.addNode(.{ .x = 100, .y = 300 }, false); // node 2
+
+    // Query triggers rebuild — now 0→2 should be reachable via 1
+    try std.testing.expect(pf.isReachable(0, 2));
+    try std.testing.expectApproxEqAbs(@as(f32, 200.0), pf.distance(0, 2), 0.01);
+}
+
+test "stair navigation across floors with max_stair_distance=300" {
+    const wide_config = Config{
+        .max_connection_distance = 200.0,
+        .max_stair_distance = 300.0,
+        .axis_tolerance = 1.0,
+    };
+
+    const Pf = PathfinderWith(u64, NoHooks);
+    var pf = Pf.init(std.testing.allocator, wide_config);
+    defer pf.deinit();
+
+    // Layout matching the game: three vertical axes connected by stair nodes
+    // x=150: nodes at y=150, y=300 (stair)
+    _ = try pf.addNode(.{ .x = 150, .y = 150 }, false); // node 0
+    _ = try pf.addNode(.{ .x = 150, .y = 300 }, true); // node 1 (stair)
+    // x=400: nodes at y=150 (stair), y=300 (stair)
+    _ = try pf.addNode(.{ .x = 400, .y = 150 }, true); // node 2 (stair)
+    _ = try pf.addNode(.{ .x = 400, .y = 300 }, true); // node 3 (stair)
+    // x=600: nodes at y=300 (stair), y=450
+    _ = try pf.addNode(.{ .x = 600, .y = 300 }, true); // node 4 (stair)
+    _ = try pf.addNode(.{ .x = 600, .y = 450 }, false); // node 5
+
+    // Navigate from node 0 (x=150,y=150) to node 5 (x=600,y=450)
+    // Path should be: 0 → 1 → 3 → 4 → 5 (via stair connections)
+    const path = try pf.navigate(1, 0, 5, 100.0);
+    try std.testing.expect(path != null);
+    try std.testing.expect(path.?.len >= 3); // at least start + stair hops + end
+    try std.testing.expect(pf.isReachable(0, 5));
+}
+
 test "path_invalidated fires when edge is broken by graph change" {
     const TestHooks = struct {
         var invalidated_entity: ?u64 = null;

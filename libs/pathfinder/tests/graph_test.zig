@@ -253,6 +253,56 @@ test "sets dirty flag on removeNode" {
     try std.testing.expect(g.dirty);
 }
 
+test "totalSlots includes tombstones, nodeCount does not" {
+    var g = Graph.init(std.testing.allocator, test_config);
+    defer g.deinit();
+
+    _ = try g.addNode(.{ .x = 100, .y = 100 }, false); // node 0
+    _ = try g.addNode(.{ .x = 100, .y = 200 }, false); // node 1
+    _ = try g.addNode(.{ .x = 100, .y = 300 }, false); // node 2
+
+    try std.testing.expectEqual(@as(u32, 3), g.nodeCount());
+    try std.testing.expectEqual(@as(u32, 3), g.totalSlots());
+
+    g.removeNode(1); // tombstone at slot 1
+
+    try std.testing.expectEqual(@as(u32, 2), g.nodeCount());
+    try std.testing.expectEqual(@as(u32, 3), g.totalSlots()); // still 3 slots
+    try std.testing.expect(g.isRemoved(1));
+    try std.testing.expect(!g.isRemoved(0));
+    try std.testing.expect(!g.isRemoved(2));
+}
+
+test "stair connects at distance 250 with max_stair_distance=300" {
+    const wide_config = Config{
+        .max_connection_distance = 200.0,
+        .max_stair_distance = 300.0,
+        .axis_tolerance = 1.0,
+    };
+    var g = Graph.init(std.testing.allocator, wide_config);
+    defer g.deinit();
+
+    // Two stair nodes 250 apart on same Y (like the game's x=150 → x=400)
+    const a = try g.addNode(.{ .x = 150, .y = 300 }, true);
+    const b = try g.addNode(.{ .x = 400, .y = 300 }, true);
+
+    const a_edges = g.getEdges(a);
+    try std.testing.expectEqual(@as(usize, 1), a_edges.len);
+    try std.testing.expectEqual(b, a_edges[0].to);
+    try std.testing.expectApproxEqAbs(@as(f32, 250.0), a_edges[0].cost, 0.01);
+}
+
+test "stair does NOT connect at distance 250 with max_stair_distance=150" {
+    var g = Graph.init(std.testing.allocator, test_config); // max_stair_distance=150
+    defer g.deinit();
+
+    const a = try g.addNode(.{ .x = 150, .y = 300 }, true);
+    _ = try g.addNode(.{ .x = 400, .y = 300 }, true);
+
+    // Should NOT connect (250 > 150)
+    try std.testing.expectEqual(@as(usize, 0), g.getEdges(a).len);
+}
+
 test "removed node is skipped by addNode connections" {
     var g = Graph.init(std.testing.allocator, test_config);
     defer g.deinit();
