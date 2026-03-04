@@ -1,4 +1,5 @@
 const std = @import("std");
+const expect = @import("zspec").expect;
 const pathfinder = @import("pathfinder");
 
 const Graph = pathfinder.Graph;
@@ -12,146 +13,223 @@ const test_config = Config{
     .axis_tolerance = 1.0,
 };
 
-test "shortest path on simple linear graph" {
-    var g = Graph.init(std.testing.allocator, test_config);
-    defer g.deinit();
+/// Factory for building common graph topologies used across specs.
+const GraphFactory = struct {
+    /// A -- B -- C linear chain on same X axis.
+    fn linear3(allocator: std.mem.Allocator) struct { graph: Graph, a: u32, b: u32, c: u32 } {
+        var g = Graph.init(allocator, test_config);
+        const a = g.addNode(.{ .x = 100, .y = 100 }, false) catch unreachable;
+        const b = g.addNode(.{ .x = 100, .y = 200 }, false) catch unreachable;
+        const c = g.addNode(.{ .x = 100, .y = 300 }, false) catch unreachable;
+        return .{ .graph = g, .a = a, .b = b, .c = c };
+    }
 
-    // A(100,100) -- B(100,200) -- C(100,300) on same X axis
-    const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
-    const b = try g.addNode(.{ .x = 100, .y = 200 }, false);
-    const c = try g.addNode(.{ .x = 100, .y = 300 }, false);
+    /// A -- B -- C -- D linear chain on same X axis.
+    fn linear4(allocator: std.mem.Allocator) struct { graph: Graph, a: u32, b: u32, c: u32, d: u32 } {
+        var g = Graph.init(allocator, test_config);
+        const a = g.addNode(.{ .x = 100, .y = 100 }, false) catch unreachable;
+        const b = g.addNode(.{ .x = 100, .y = 200 }, false) catch unreachable;
+        const c = g.addNode(.{ .x = 100, .y = 300 }, false) catch unreachable;
+        const d = g.addNode(.{ .x = 100, .y = 400 }, false) catch unreachable;
+        return .{ .graph = g, .a = a, .b = b, .c = c, .d = d };
+    }
 
-    var fw = try FloydWarshall.build(std.testing.allocator, &g);
-    defer fw.deinit();
+    /// Two disconnected nodes on different X axes (no path between them).
+    fn disconnected2(allocator: std.mem.Allocator) struct { graph: Graph, a: u32, b: u32 } {
+        var g = Graph.init(allocator, test_config);
+        const a = g.addNode(.{ .x = 100, .y = 100 }, false) catch unreachable;
+        const b = g.addNode(.{ .x = 300, .y = 100 }, false) catch unreachable;
+        return .{ .graph = g, .a = a, .b = b };
+    }
 
-    // A to C should go through B, total distance = 200
-    try std.testing.expectApproxEqAbs(@as(f32, 100.0), fw.getDistance(a, b), 0.01);
-    try std.testing.expectApproxEqAbs(@as(f32, 200.0), fw.getDistance(a, c), 0.01);
-    try std.testing.expectApproxEqAbs(@as(f32, 100.0), fw.getDistance(b, c), 0.01);
-}
+    /// Two-floor stair graph: A--B(stair)--C(stair)--D
+    fn twoFloorStair(allocator: std.mem.Allocator) struct { graph: Graph, a: u32, b: u32, c: u32, d: u32 } {
+        var g = Graph.init(allocator, test_config);
+        const a = g.addNode(.{ .x = 100, .y = 100 }, false) catch unreachable;
+        const b = g.addNode(.{ .x = 100, .y = 300 }, true) catch unreachable;
+        const c = g.addNode(.{ .x = 200, .y = 300 }, true) catch unreachable;
+        const d = g.addNode(.{ .x = 200, .y = 450 }, false) catch unreachable;
+        return .{ .graph = g, .a = a, .b = b, .c = c, .d = d };
+    }
+};
 
-test "unreachable nodes return null and inf" {
-    var g = Graph.init(std.testing.allocator, test_config);
-    defer g.deinit();
+pub const FloydWarshallSpec = struct {
+    pub const shortest_path = struct {
+        test "computes distances for linear graph" {
+            var setup = GraphFactory.linear3(std.testing.allocator);
+            defer setup.graph.deinit();
 
-    // Two disconnected nodes (different X axis)
-    const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
-    const b = try g.addNode(.{ .x = 300, .y = 100 }, false);
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
 
-    var fw = try FloydWarshall.build(std.testing.allocator, &g);
-    defer fw.deinit();
+            try expect.equal(fw.getDistance(setup.a, setup.b), 100.0);
+            try expect.equal(fw.getDistance(setup.a, setup.c), 200.0);
+            try expect.equal(fw.getDistance(setup.b, setup.c), 100.0);
+        }
 
-    try std.testing.expect(fw.getDistance(a, b) == INF);
-    try std.testing.expect(fw.getNextHop(a, b) == null);
+        test "reconstructs path in correct sequence" {
+            var setup = GraphFactory.linear3(std.testing.allocator);
+            defer setup.graph.deinit();
 
-    const path = try fw.getPath(std.testing.allocator, a, b);
-    try std.testing.expect(path == null);
-}
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
 
-test "path reconstruction matches expected sequence" {
-    var g = Graph.init(std.testing.allocator, test_config);
-    defer g.deinit();
+            const path = (try fw.getPath(std.testing.allocator, setup.a, setup.c)).?;
+            defer std.testing.allocator.free(path);
 
-    // A -- B -- C on same X
-    const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
-    const b = try g.addNode(.{ .x = 100, .y = 200 }, false);
-    const c = try g.addNode(.{ .x = 100, .y = 300 }, false);
+            try expect.equal(path.len, 3);
+            try expect.equal(path[0], setup.a);
+            try expect.equal(path[1], setup.b);
+            try expect.equal(path[2], setup.c);
+        }
 
-    var fw = try FloydWarshall.build(std.testing.allocator, &g);
-    defer fw.deinit();
+        test "next hop gives first step toward goal" {
+            var setup = GraphFactory.linear3(std.testing.allocator);
+            defer setup.graph.deinit();
 
-    const path = (try fw.getPath(std.testing.allocator, a, c)).?;
-    defer std.testing.allocator.free(path);
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
 
-    try std.testing.expectEqual(@as(usize, 3), path.len);
-    try std.testing.expectEqual(a, path[0]);
-    try std.testing.expectEqual(b, path[1]);
-    try std.testing.expectEqual(c, path[2]);
-}
+            try expect.equal(fw.getNextHop(setup.a, setup.c).?, setup.b);
+            try expect.equal(fw.getNextHop(setup.b, setup.a).?, setup.a);
+            try expect.equal(fw.getNextHop(setup.a, setup.b).?, setup.b);
+        }
+    };
 
-test "single node graph" {
-    var g = Graph.init(std.testing.allocator, test_config);
-    defer g.deinit();
+    pub const unreachable_nodes = struct {
+        test "returns inf distance for disconnected nodes" {
+            var setup = GraphFactory.disconnected2(std.testing.allocator);
+            defer setup.graph.deinit();
 
-    const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
 
-    var fw = try FloydWarshall.build(std.testing.allocator, &g);
-    defer fw.deinit();
+            try expect.equal(fw.getDistance(setup.a, setup.b), INF);
+        }
 
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), fw.getDistance(a, a), 0.01);
+        test "returns null next hop for disconnected nodes" {
+            var setup = GraphFactory.disconnected2(std.testing.allocator);
+            defer setup.graph.deinit();
 
-    const path = (try fw.getPath(std.testing.allocator, a, a)).?;
-    defer std.testing.allocator.free(path);
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
 
-    try std.testing.expectEqual(@as(usize, 1), path.len);
-    try std.testing.expectEqual(a, path[0]);
-}
+            try expect.toBeNull(fw.getNextHop(setup.a, setup.b));
+        }
 
-test "next hop gives first step" {
-    var g = Graph.init(std.testing.allocator, test_config);
-    defer g.deinit();
+        test "getPath returns null without leaking for disconnected nodes" {
+            // std.testing.allocator detects leaks — this test verifies
+            // that getPath properly frees internal state on null return.
+            var setup = GraphFactory.disconnected2(std.testing.allocator);
+            defer setup.graph.deinit();
 
-    // A -- B -- C
-    const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
-    const b = try g.addNode(.{ .x = 100, .y = 200 }, false);
-    const c = try g.addNode(.{ .x = 100, .y = 300 }, false);
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
 
-    var fw = try FloydWarshall.build(std.testing.allocator, &g);
-    defer fw.deinit();
+            const path = try fw.getPath(std.testing.allocator, setup.a, setup.b);
+            try expect.toBeNull(path);
+        }
 
-    // Next hop from A to C should be B
-    try std.testing.expectEqual(b, fw.getNextHop(a, c).?);
-    // Next hop from B to A should be A
-    try std.testing.expectEqual(a, fw.getNextHop(b, a).?);
-    // Next hop from A to B should be B (direct neighbor)
-    try std.testing.expectEqual(b, fw.getNextHop(a, b).?);
-}
+        test "getPath returns null without leaking after node removal breaks bridge" {
+            // Regression: removing the bridge node between A and C makes them
+            // unreachable. getPath must return null and free any partial state.
+            var setup = GraphFactory.linear3(std.testing.allocator);
+            defer setup.graph.deinit();
 
-test "two-floor stair path" {
-    var g = Graph.init(std.testing.allocator, test_config);
-    defer g.deinit();
+            setup.graph.removeNode(setup.b);
 
-    // Floor 1: A(100,100) -- B(100,300) on X=100
-    // Floor 2: C(200,300) -- D(200,450) on X=200
-    // Stair: B(100,300) -- C(200,300) on Y=300 (both stairs)
-    const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
-    const b = try g.addNode(.{ .x = 100, .y = 300 }, true); // stair
-    const c = try g.addNode(.{ .x = 200, .y = 300 }, true); // stair
-    const d = try g.addNode(.{ .x = 200, .y = 450 }, false);
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
 
-    var fw = try FloydWarshall.build(std.testing.allocator, &g);
-    defer fw.deinit();
+            try expect.equal(fw.getDistance(setup.a, setup.c), INF);
 
-    // A to D: A -> B -> C -> D
-    const path = (try fw.getPath(std.testing.allocator, a, d)).?;
-    defer std.testing.allocator.free(path);
+            const path = try fw.getPath(std.testing.allocator, setup.a, setup.c);
+            try expect.toBeNull(path);
+        }
+    };
 
-    try std.testing.expectEqual(@as(usize, 4), path.len);
-    try std.testing.expectEqual(a, path[0]);
-    try std.testing.expectEqual(b, path[1]);
-    try std.testing.expectEqual(c, path[2]);
-    try std.testing.expectEqual(d, path[3]);
+    pub const self_path = struct {
+        test "self-distance is zero" {
+            var g = Graph.init(std.testing.allocator, test_config);
+            defer g.deinit();
 
-    // Verify total distance: A-B=200, B-C=100, C-D=150 = 450
-    try std.testing.expectApproxEqAbs(@as(f32, 450.0), fw.getDistance(a, d), 0.01);
-}
+            const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
 
-test "removed nodes are excluded from paths" {
-    var g = Graph.init(std.testing.allocator, test_config);
-    defer g.deinit();
+            var fw = try FloydWarshall.build(std.testing.allocator, &g);
+            defer fw.deinit();
 
-    // A -- B -- C
-    const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
-    _ = try g.addNode(.{ .x = 100, .y = 200 }, false); // B
-    const c = try g.addNode(.{ .x = 100, .y = 300 }, false);
+            try expect.equal(fw.getDistance(a, a), 0.0);
+        }
 
-    // Remove B
-    g.removeNode(1);
+        test "self-path returns single-element slice" {
+            var g = Graph.init(std.testing.allocator, test_config);
+            defer g.deinit();
 
-    var fw = try FloydWarshall.build(std.testing.allocator, &g);
-    defer fw.deinit();
+            const a = try g.addNode(.{ .x = 100, .y = 100 }, false);
 
-    // A to C should be unreachable (B was the bridge)
-    try std.testing.expect(fw.getDistance(a, c) == INF);
-    try std.testing.expect(fw.getNextHop(a, c) == null);
-}
+            var fw = try FloydWarshall.build(std.testing.allocator, &g);
+            defer fw.deinit();
+
+            const path = (try fw.getPath(std.testing.allocator, a, a)).?;
+            defer std.testing.allocator.free(path);
+
+            try expect.equal(path.len, 1);
+            try expect.equal(path[0], a);
+        }
+    };
+
+    pub const stair_connections = struct {
+        test "finds path across floors via stair nodes" {
+            var setup = GraphFactory.twoFloorStair(std.testing.allocator);
+            defer setup.graph.deinit();
+
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
+
+            const path = (try fw.getPath(std.testing.allocator, setup.a, setup.d)).?;
+            defer std.testing.allocator.free(path);
+
+            try expect.equal(path.len, 4);
+            try expect.equal(path[0], setup.a);
+            try expect.equal(path[1], setup.b);
+            try expect.equal(path[2], setup.c);
+            try expect.equal(path[3], setup.d);
+
+            // A-B=200, B-C=100, C-D=150 = 450
+            try expect.equal(fw.getDistance(setup.a, setup.d), 450.0);
+        }
+    };
+
+    pub const tombstones = struct {
+        test "removed nodes are excluded from paths" {
+            var setup = GraphFactory.linear3(std.testing.allocator);
+            defer setup.graph.deinit();
+
+            setup.graph.removeNode(setup.b);
+
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
+
+            try expect.equal(fw.getDistance(setup.a, setup.c), INF);
+            try expect.toBeNull(fw.getNextHop(setup.a, setup.c));
+        }
+
+        test "remaining nodes still connected after unrelated removal" {
+            var setup = GraphFactory.linear4(std.testing.allocator);
+            defer setup.graph.deinit();
+
+            // Remove node D — A-B-C chain should still work
+            setup.graph.removeNode(setup.d);
+
+            var fw = try FloydWarshall.build(std.testing.allocator, &setup.graph);
+            defer fw.deinit();
+
+            try expect.equal(fw.getDistance(setup.a, setup.c), 200.0);
+
+            const path = (try fw.getPath(std.testing.allocator, setup.a, setup.c)).?;
+            defer std.testing.allocator.free(path);
+
+            try expect.equal(path.len, 3);
+        }
+    };
+};

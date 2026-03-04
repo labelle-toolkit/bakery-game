@@ -86,14 +86,18 @@ pub const FloydWarshall = struct {
             return path;
         }
 
-        // Check reachability first
+        // Required: the optimized FW initializes next[i][j]=j for all pairs,
+        // so setPathWithMappingUnmanaged returns a bogus path for unreachable nodes.
         if (!self.inner.hasPathWithMapping(start, goal)) return null;
 
         var path_list = std.ArrayListUnmanaged(NodeId){};
         errdefer path_list.deinit(allocator);
 
         self.inner.setPathWithMappingUnmanaged(allocator, &path_list, start, goal) catch |err| switch (err) {
-            error.NoPathFound => return null,
+            error.NoPathFound => {
+                path_list.deinit(allocator);
+                return null;
+            },
             error.OutOfMemory => return error.OutOfMemory,
         };
 
