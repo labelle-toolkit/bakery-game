@@ -8,6 +8,10 @@ pub fn build(b: *std.Build) void {
     const labelle_core_dep = b.dependency("labelle-core", .{ .target = target, .optimize = optimize });
     const labelle_core_mod = labelle_core_dep.module("labelle-core");
 
+    // zig-utils dependency
+    const zig_utils_dep = b.dependency("zig-utils", .{ .target = target, .optimize = optimize });
+    const zig_utils_mod = zig_utils_dep.module("zig_utils");
+
     // Main module
     const pathfinder_mod = b.addModule("pathfinder", .{
         .root_source_file = b.path("src/root.zig"),
@@ -15,6 +19,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     pathfinder_mod.addImport("labelle-core", labelle_core_mod);
+    pathfinder_mod.addImport("zig-utils", zig_utils_mod);
+
+    // zspec dependency (test only)
+    const zspec = b.dependency("zspec", .{ .target = target, .optimize = optimize });
 
     // Unit tests
     const test_mod = b.createModule(.{
@@ -24,9 +32,11 @@ pub fn build(b: *std.Build) void {
     });
     test_mod.addImport("pathfinder", pathfinder_mod);
     test_mod.addImport("labelle-core", labelle_core_mod);
+    test_mod.addImport("zspec", zspec.module("zspec"));
 
     const unit_tests = b.addTest(.{
         .root_module = test_mod,
+        .test_runner = .{ .path = zspec.path("src/runner.zig"), .mode = .simple },
     });
 
     const run_unit_tests = b.addRunArtifact(unit_tests);

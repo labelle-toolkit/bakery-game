@@ -13,6 +13,7 @@ const Config = graph_mod.Config;
 const FloydWarshall = fw_mod.FloydWarshall;
 const MovementPath = mp_mod.MovementPath;
 const Allocator = std.mem.Allocator;
+const log = std.log.scoped(.pathfinder);
 
 const ARRIVAL_THRESHOLD: f32 = 2.0;
 
@@ -170,8 +171,8 @@ pub fn PathfinderWith(
             if (self.active.count() == 0) return;
 
             // Collect entities that have arrived (can't remove during iteration)
-            var arrived_buf: [64]GameId = undefined;
-            var arrived_count: usize = 0;
+            var arrived_list = std.ArrayListUnmanaged(GameId){};
+            defer arrived_list.deinit(self.allocator);
 
             for (self.active.keys(), self.active.values()) |entity, *entry| {
                 const path = &entry.path;
@@ -215,15 +216,14 @@ pub fn PathfinderWith(
 
                 // Check if arrived at final destination
                 if (path.current_index >= path.len) {
-                    if (arrived_count < arrived_buf.len) {
-                        arrived_buf[arrived_count] = entity;
-                        arrived_count += 1;
-                    }
+                    arrived_list.append(self.allocator, entity) catch |err| {
+                        log.warn("Failed to record arrived entity: {}", .{err});
+                    };
                 }
             }
 
             // Process arrivals (remove from active, fire hooks)
-            for (arrived_buf[0..arrived_count]) |entity| {
+            for (arrived_list.items) |entity| {
                 const entry = self.active.fetchSwapRemove(entity) orelse continue;
                 self.allocator.free(entry.value.path.positions);
                 self.allocator.free(entry.value.path.node_path);
@@ -289,8 +289,8 @@ pub fn PathfinderWith(
             const fw = self.fw orelse return;
 
             // Re-validate active paths against the rebuilt graph
-            var invalidated_buf: [64]GameId = undefined;
-            var invalidated_count: usize = 0;
+            var invalidated_list = std.ArrayListUnmanaged(GameId){};
+            defer invalidated_list.deinit(self.allocator);
 
             for (self.active.keys(), self.active.values()) |entity, *entry| {
                 const path = &entry.path;
@@ -317,34 +317,79 @@ pub fn PathfinderWith(
                 }
 
                 if (broken) {
-                    if (invalidated_count < invalidated_buf.len) {
-                        invalidated_buf[invalidated_count] = entity;
-                        invalidated_count += 1;
-                    }
+                    invalidated_list.append(self.allocator, entity) catch |err| {
+                        log.warn("Failed to record path invalidation for entity: {}", .{err});
+                    };
                 }
             }
 
-            // Process invalidations
-            for (invalidated_buf[0..invalidated_count]) |entity| {
-                const entry = self.active.fetchSwapRemove(entity) orelse continue;
-                const path = &entry.value.path;
+            // Process invalidations: try to reroute, only fire hook if reroute fails
+            for (invalidated_list.items) |entity| {
+                const entry_ptr = self.active.getPtr(entity) orelse continue;
+                const path = &entry_ptr.path;
 
-                // Determine entity's current node for the hook payload
+                // Determine entity's current node
                 const current_node_pos: u32 = if (path.current_index > 0) path.current_index - 1 else 0;
                 const current_node: NodeId = if (current_node_pos < path.node_path.len)
                     path.node_path[current_node_pos]
                 else
                     path.goal_node;
+                const goal_node = path.goal_node;
+                const speed = path.speed;
 
-                self.allocator.free(path.positions);
-                self.allocator.free(path.node_path);
+                // Try to reroute from current node to same goal
+                const rerouted = if (!self.graph.isRemoved(current_node))
+                    fw.getPath(self.allocator, current_node, goal_node) catch null
+                else
+                    null;
 
-                dispatchHook(GameHooks, .{ .path_invalidated = .{
-                    .entity = entity,
-                    .goal_node = path.goal_node,
-                    .current_node = current_node,
-                    .registry = null,
-                } });
+                if (rerouted) |new_node_path| {
+                    // Reroute succeeded — replace path in place
+                    const new_positions = self.allocator.alloc(Position, new_node_path.len) catch {
+                        self.allocator.free(new_node_path);
+                        // Allocation failed — fall through to invalidation
+                        const removed = self.active.fetchSwapRemove(entity) orelse continue;
+                        self.allocator.free(removed.value.path.positions);
+                        self.allocator.free(removed.value.path.node_path);
+                        dispatchHook(GameHooks, .{ .path_invalidated = .{
+                            .entity = entity,
+                            .goal_node = goal_node,
+                            .current_node = current_node,
+                            .registry = null,
+                        } });
+                        continue;
+                    };
+                    for (new_node_path, 0..) |node_id, i| {
+                        new_positions[i] = self.graph.getPosition(node_id);
+                    }
+
+                    // Free old path data
+                    self.allocator.free(path.positions);
+                    self.allocator.free(path.node_path);
+
+                    // Replace with rerouted path (start at index 1, entity is at current_node)
+                    const start_idx: u32 = if (new_positions.len > 1) 1 else 0;
+                    path.* = .{
+                        .positions = new_positions,
+                        .node_path = new_node_path,
+                        .current_index = start_idx,
+                        .len = @intCast(new_positions.len),
+                        .speed = speed,
+                        .goal_node = goal_node,
+                    };
+                } else {
+                    // Reroute failed — remove and fire hook
+                    const removed = self.active.fetchSwapRemove(entity) orelse continue;
+                    self.allocator.free(removed.value.path.positions);
+                    self.allocator.free(removed.value.path.node_path);
+
+                    dispatchHook(GameHooks, .{ .path_invalidated = .{
+                        .entity = entity,
+                        .goal_node = goal_node,
+                        .current_node = current_node,
+                        .registry = null,
+                    } });
+                }
             }
 
             _ = ctx;

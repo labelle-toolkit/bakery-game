@@ -46,19 +46,19 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     const registry = game.getRegistry();
 
     // Collect entities to process (can't modify during iteration)
-    var process_buf: [64]Entity = undefined;
-    var process_count: usize = 0;
+    var process_list = std.ArrayListUnmanaged(Entity){};
+    defer process_list.deinit(game.allocator);
 
     var view = registry.view(.{NavigationIntent});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
-        if (process_count < process_buf.len) {
-            process_buf[process_count] = entity;
-            process_count += 1;
-        }
+        process_list.append(game.allocator, entity) catch |err| {
+            log.err("Failed to collect NavigationIntent entity: {}", .{err});
+            break;
+        };
     }
 
-    for (process_buf[0..process_count]) |entity| {
+    for (process_list.items) |entity| {
         const intent = registry.tryGet(NavigationIntent, entity) orelse continue;
         const entity_id = engine.entityToU64(entity);
 
@@ -140,11 +140,13 @@ fn handleNavigating(registry: anytype, entity: Entity, entity_id: u64, intent: *
     // Update worker's ClosestMovementNode to reflect new position
     if (intent.target_node != 0xFFFFFFFF) {
         if (pathfinder_bridge.nodePosition(intent.target_node)) |_| {
-            registry.set(entity, ClosestMovementNode{
-                .node_entity = intent.target_entity,
-                .node_id = intent.target_node,
-                .distance = 0,
-            });
+            if (pathfinder_bridge.nodeEntity(intent.target_node)) |node_entity_id| {
+                registry.set(entity, ClosestMovementNode{
+                    .node_entity = node_entity_id,
+                    .node_id = intent.target_node,
+                    .distance = 0,
+                });
+            }
         }
     }
 
