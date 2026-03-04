@@ -24,8 +24,6 @@ const Position = engine.render.Position;
 const NavigationIntent = navigation_intent_comp.NavigationIntent;
 const MovementTarget = movement_target_comp.MovementTarget;
 const ClosestMovementNode = closest_node_comp.ClosestMovementNode;
-const movement_node_comp = @import("../components/movement_node.zig");
-const MovementNode = movement_node_comp.MovementNode;
 
 const log = std.log.scoped(.navigation_orchestrator);
 
@@ -142,7 +140,7 @@ fn handleNavigating(registry: anytype, entity: Entity, entity_id: u64, intent: *
     // Update worker's ClosestMovementNode to reflect new position
     if (intent.target_node != 0xFFFFFFFF) {
         if (pathfinder_bridge.nodePosition(intent.target_node)) |_| {
-            if (findNodeEntity(registry, intent.target_node)) |node_entity_id| {
+            if (pathfinder_bridge.nodeEntity(intent.target_node)) |node_entity_id| {
                 registry.set(entity, ClosestMovementNode{
                     .node_entity = node_entity_id,
                     .node_id = intent.target_node,
@@ -173,21 +171,6 @@ fn transitionToFallback(registry: anytype, entity: Entity) void {
     if (registry.getComponent(entity, NavigationIntent)) |mutable_intent| {
         mutable_intent.state = .fallback_linear;
     }
-}
-
-// --- Internal helpers ---
-
-/// Find the MovementNode entity for a given node_id.
-fn findNodeEntity(registry: anytype, target_node_id: u32) ?u64 {
-    var mn_view = registry.view(.{ MovementNode, Position });
-    var mn_iter = mn_view.entityIterator();
-    while (mn_iter.next()) |node_entity| {
-        const mn = mn_view.get(MovementNode, node_entity);
-        if (mn.node_id == target_node_id) {
-            return engine.entityToU64(node_entity);
-        }
-    }
-    return null;
 }
 
 // --- Public API (for cancellation by other scripts) ---

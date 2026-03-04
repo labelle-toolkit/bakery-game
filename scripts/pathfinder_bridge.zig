@@ -48,6 +48,11 @@ const pf_config = Config{
 
 var pf: ?Pf = null;
 
+/// Lookup map from pathfinder node_id to the ECS entity (as u64) that has the MovementNode component.
+/// Built at init time for O(1) lookups.
+var node_id_to_entity: std.AutoHashMap(u32, u64) = undefined;
+var node_map_initialized: bool = false;
+
 /// Adapter that bridges the pathfinder's duck-typed `ctx` API to the engine's
 /// game.pos mixin. The pathfinder calls `ctx.getEntityPosition(entity_id)` and
 /// `ctx.moveEntity(entity_id, dx, dy)`.
@@ -70,6 +75,8 @@ pub fn init(game: *Game, scene: *Scene) void {
     _ = scene;
 
     pf = Pf.init(game.allocator, pf_config);
+    node_id_to_entity = std.AutoHashMap(u32, u64).init(game.allocator);
+    node_map_initialized = true;
 
     const registry = game.getRegistry();
     var node_count: u32 = 0;
@@ -90,6 +97,11 @@ pub fn init(game: *Game, scene: *Scene) void {
         if (registry.getComponent(entity, MovementNode)) |mn| {
             mn.node_id = node_id;
         }
+
+        // Track node_id → entity mapping for O(1) lookups
+        node_id_to_entity.put(node_id, engine.entityToU64(entity)) catch |err| {
+            log.err("Failed to track node {d}: {}", .{ node_id, err });
+        };
         node_count += 1;
     }
 
@@ -140,6 +152,10 @@ pub fn deinit() void {
     if (pf) |*p| {
         p.deinit();
         pf = null;
+    }
+    if (node_map_initialized) {
+        node_id_to_entity.deinit();
+        node_map_initialized = false;
     }
     log.info("Script deinitialized", .{});
 }
@@ -222,6 +238,12 @@ pub fn isNavigating(entity_id: u64) bool {
         return p.isNavigating(entity_id);
     }
     return false;
+}
+
+/// Look up the ECS entity (as u64) for a pathfinder node_id. O(1).
+pub fn nodeEntity(node_id: u32) ?u64 {
+    if (!node_map_initialized) return null;
+    return node_id_to_entity.get(node_id);
 }
 
 /// Get the distance between two nodes.
