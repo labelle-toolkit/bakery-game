@@ -22,6 +22,7 @@ pub const FloydWarshall = struct {
         const size = @as(usize, n) * @as(usize, n);
 
         const dist = try allocator.alloc(f32, size);
+        errdefer allocator.free(dist);
         const next = try allocator.alloc(?NodeId, size);
 
         // Initialize: all distances to INF, all next-hops to null

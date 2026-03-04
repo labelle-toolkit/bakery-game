@@ -76,6 +76,11 @@ pub const GameHooks = struct {
         // Mark worker as pending arrival (don't start work until they arrive)
         registry.set(worker_entity, PendingArrival{});
 
+        // Clear any stale MovementTarget to prevent race with worker_movement
+        if (registry.tryGet(MovementTarget, worker_entity) != null) {
+            registry.remove(MovementTarget, worker_entity);
+        }
+
         // Set NavigationIntent to route worker to workstation via pathfinder
         registry.set(worker_entity, NavigationIntent{
             .target_entity = payload.workstation_id,
@@ -500,6 +505,12 @@ pub const GameHooks = struct {
         // Always move worker to workstation before starting work.
         // If already there, arrive_at_workstation fires on the next frame.
         registry.set(worker_entity, PendingArrival{});
+
+        // Clear any stale MovementTarget to prevent race with worker_movement
+        if (registry.tryGet(MovementTarget, worker_entity) != null) {
+            registry.remove(MovementTarget, worker_entity);
+        }
+
         registry.set(worker_entity, NavigationIntent{
             .target_entity = payload.workstation_id,
             .action = .arrive_at_workstation,

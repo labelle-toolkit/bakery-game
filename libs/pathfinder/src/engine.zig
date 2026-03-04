@@ -170,8 +170,8 @@ pub fn PathfinderWith(
             if (self.active.count() == 0) return;
 
             // Collect entities that have arrived (can't remove during iteration)
-            var arrived_buf: [64]GameId = undefined;
-            var arrived_count: usize = 0;
+            var arrived_list = std.ArrayListUnmanaged(GameId){};
+            defer arrived_list.deinit(self.allocator);
 
             for (self.active.keys(), self.active.values()) |entity, *entry| {
                 const path = &entry.path;
@@ -215,15 +215,12 @@ pub fn PathfinderWith(
 
                 // Check if arrived at final destination
                 if (path.current_index >= path.len) {
-                    if (arrived_count < arrived_buf.len) {
-                        arrived_buf[arrived_count] = entity;
-                        arrived_count += 1;
-                    }
+                    arrived_list.append(self.allocator, entity) catch {};
                 }
             }
 
             // Process arrivals (remove from active, fire hooks)
-            for (arrived_buf[0..arrived_count]) |entity| {
+            for (arrived_list.items) |entity| {
                 const entry = self.active.fetchSwapRemove(entity) orelse continue;
                 self.allocator.free(entry.value.path.positions);
                 self.allocator.free(entry.value.path.node_path);
@@ -289,8 +286,8 @@ pub fn PathfinderWith(
             const fw = self.fw orelse return;
 
             // Re-validate active paths against the rebuilt graph
-            var invalidated_buf: [64]GameId = undefined;
-            var invalidated_count: usize = 0;
+            var invalidated_list = std.ArrayListUnmanaged(GameId){};
+            defer invalidated_list.deinit(self.allocator);
 
             for (self.active.keys(), self.active.values()) |entity, *entry| {
                 const path = &entry.path;
@@ -317,15 +314,12 @@ pub fn PathfinderWith(
                 }
 
                 if (broken) {
-                    if (invalidated_count < invalidated_buf.len) {
-                        invalidated_buf[invalidated_count] = entity;
-                        invalidated_count += 1;
-                    }
+                    invalidated_list.append(self.allocator, entity) catch {};
                 }
             }
 
             // Process invalidations
-            for (invalidated_buf[0..invalidated_count]) |entity| {
+            for (invalidated_list.items) |entity| {
                 const entry = self.active.fetchSwapRemove(entity) orelse continue;
                 const path = &entry.value.path;
 

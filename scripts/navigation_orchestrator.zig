@@ -24,6 +24,8 @@ const Position = engine.render.Position;
 const NavigationIntent = navigation_intent_comp.NavigationIntent;
 const MovementTarget = movement_target_comp.MovementTarget;
 const ClosestMovementNode = closest_node_comp.ClosestMovementNode;
+const movement_node_comp = @import("../components/movement_node.zig");
+const MovementNode = movement_node_comp.MovementNode;
 
 const log = std.log.scoped(.navigation_orchestrator);
 
@@ -46,19 +48,16 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     const registry = game.getRegistry();
 
     // Collect entities to process (can't modify during iteration)
-    var process_buf: [64]Entity = undefined;
-    var process_count: usize = 0;
+    var process_list = std.ArrayListUnmanaged(Entity){};
+    defer process_list.deinit(game.allocator);
 
     var view = registry.view(.{NavigationIntent});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
-        if (process_count < process_buf.len) {
-            process_buf[process_count] = entity;
-            process_count += 1;
-        }
+        process_list.append(game.allocator, entity) catch continue;
     }
 
-    for (process_buf[0..process_count]) |entity| {
+    for (process_list.items) |entity| {
         const intent = registry.tryGet(NavigationIntent, entity) orelse continue;
         const entity_id = engine.entityToU64(entity);
 
@@ -140,8 +139,10 @@ fn handleNavigating(registry: anytype, entity: Entity, entity_id: u64, intent: *
     // Update worker's ClosestMovementNode to reflect new position
     if (intent.target_node != 0xFFFFFFFF) {
         if (pathfinder_bridge.nodePosition(intent.target_node)) |_| {
+            // Find the actual MovementNode entity for this node_id
+            const node_entity_id = findNodeEntity(registry, intent.target_node);
             registry.set(entity, ClosestMovementNode{
-                .node_entity = intent.target_entity,
+                .node_entity = node_entity_id,
                 .node_id = intent.target_node,
                 .distance = 0,
             });
@@ -169,6 +170,21 @@ fn transitionToFallback(registry: anytype, entity: Entity) void {
     if (registry.getComponent(entity, NavigationIntent)) |mutable_intent| {
         mutable_intent.state = .fallback_linear;
     }
+}
+
+// --- Internal helpers ---
+
+/// Find the MovementNode entity for a given node_id.
+fn findNodeEntity(registry: anytype, target_node_id: u32) u64 {
+    var mn_view = registry.view(.{ MovementNode, Position });
+    var mn_iter = mn_view.entityIterator();
+    while (mn_iter.next()) |node_entity| {
+        const mn = mn_view.get(MovementNode, node_entity);
+        if (mn.node_id == target_node_id) {
+            return engine.entityToU64(node_entity);
+        }
+    }
+    return 0;
 }
 
 // --- Public API (for cancellation by other scripts) ---
