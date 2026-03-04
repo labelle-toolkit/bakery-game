@@ -9,7 +9,8 @@
             .hash = "labelle_core-0.2.0-CcnR4HNtAACCCNxF1p5Jg1Ia1Q2aGmEKkB1k2ztrIv8S",
         },
         .@"zig-utils" = .{
-            .path = "../../../zig-utils",
+            .url = "https://github.com/labelle-toolkit/zig-utils/archive/refs/tags/v0.6.1.tar.gz",
+            .hash = "zig_utils-0.6.0-dUo897_PAQBAm8SR8wIOkj7CEDXxu7VkbM4jYtlMaK3n",
         },
         .zspec = .{
             .url = "https://github.com/apotema/zspec/archive/refs/heads/main.tar.gz",

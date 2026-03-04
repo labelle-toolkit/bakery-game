@@ -1,23 +1,20 @@
 // Storage and Workstation inspector script
 //
-// This script queries for Storage and Workstation components and validates
-// that the task engine integration is working correctly.
+// Debug script that logs all workstation and storage entities on first update.
 
 const std = @import("std");
 const engine = @import("labelle-engine");
-const labelle_tasks = @import("labelle-tasks");
 const main = @import("../main.zig");
-const items = @import("../enums/items.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
 const Position = engine.render.Position;
-const Shape = engine.render.Shape;
-// Use bound component types from main
-const BoundTypes = @import("../main.zig").labelle_tasksBindItems;
-const Storage = BoundTypes.Storage;
-const Workstation = BoundTypes.Workstation;
-const Context = main.labelle_tasksContext;
+const Workstation = main.Workstation;
+const Storage = main.Storage;
+const Eis = main.Eis;
+const Iis = main.Iis;
+const Ios = main.Ios;
+const Eos = main.Eos;
 
 var has_run = false;
 
@@ -32,7 +29,6 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     _ = scene;
     _ = dt;
 
-    // Run once on first update
     if (has_run) return;
     has_run = true;
 
@@ -47,59 +43,42 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         var iter = view.entityIterator();
 
         while (iter.next()) |entity| {
-            const ws = view.getConst(entity);
+            const ws = view.get(entity);
             workstation_count += 1;
-            std.log.warn("[StorageInspector] Workstation entity={any}, process_duration={d}, storages={d}", .{
+            std.log.warn("[StorageInspector] Workstation entity={any}, process_duration={d}", .{
                 entity,
                 ws.process_duration,
-                ws.storages.len,
             });
         }
     }
 
-    // Count and log storages by type
+    // Count storages by role marker
     var eis_count: u32 = 0;
     var iis_count: u32 = 0;
     var ios_count: u32 = 0;
     var eos_count: u32 = 0;
-    var standalone_count: u32 = 0;
     {
         var view = registry.view(.{Storage});
         var iter = view.entityIterator();
 
         while (iter.next()) |entity| {
-            const storage = view.getConst(entity);
-
-            switch (storage.role) {
-                .eis => {
-                    eis_count += 1;
-                    std.log.warn("[StorageInspector] EIS entity={any}, accepts={any}", .{ entity, storage.accepts });
-                },
-                .iis => {
-                    iis_count += 1;
-                    std.log.warn("[StorageInspector] IIS entity={any}", .{entity});
-                },
-                .ios => {
-                    ios_count += 1;
-                    std.log.warn("[StorageInspector] IOS entity={any}, accepts={any}", .{ entity, storage.accepts });
-                },
-                .eos => {
-                    eos_count += 1;
-                    std.log.warn("[StorageInspector] EOS entity={any}", .{entity});
-                },
-                .standalone => {
-                    standalone_count += 1;
-                    std.log.warn("[StorageInspector] Standalone entity={any}, accepts={any}", .{ entity, storage.accepts });
-                },
+            if (registry.tryGet(Eis, entity) != null) {
+                eis_count += 1;
+                std.log.warn("[StorageInspector] EIS entity={any}", .{entity});
+            } else if (registry.tryGet(Iis, entity) != null) {
+                iis_count += 1;
+                std.log.warn("[StorageInspector] IIS entity={any}", .{entity});
+            } else if (registry.tryGet(Ios, entity) != null) {
+                ios_count += 1;
+                std.log.warn("[StorageInspector] IOS entity={any}", .{entity});
+            } else if (registry.tryGet(Eos, entity) != null) {
+                eos_count += 1;
+                std.log.warn("[StorageInspector] EOS entity={any}", .{entity});
             }
         }
     }
 
     std.log.warn("[StorageInspector] Total workstations: {d}", .{workstation_count});
-    std.log.warn("[StorageInspector] Total storages - EIS:{d}, IIS:{d}, IOS:{d}, EOS:{d}, Standalone:{d}", .{ eis_count, iis_count, ios_count, eos_count, standalone_count });
-
-    // Validate task engine integration (disabled - introspection API not available)
-    std.log.info("[StorageInspector] PASS: Task engine is assumed to be initialized", .{});
-
+    std.log.warn("[StorageInspector] Total storages - EIS:{d}, IIS:{d}, IOS:{d}, EOS:{d}", .{ eis_count, iis_count, ios_count, eos_count });
     std.log.warn("[StorageInspector] === Inspection Complete ===", .{});
 }

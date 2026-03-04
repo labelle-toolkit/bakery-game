@@ -6,6 +6,7 @@
             .color = .{ .r = 50, .g = 100, .b = 200, .a = 255 },
         },
         .Workstation = .{
+            .workstation_type = .kitchen,
             .process_duration = 3,
             // Producer workstation: no EIS/IIS inputs, just produces water
             .storages = .{
@@ -17,7 +18,8 @@
                             .shape = .{ .rectangle = .{ .width = 25, .height = 25, .fill = .outline } },
                             .color = .{ .r = 100, .g = 150, .b = 220, .a = 255 },
                         },
-                        .Storage = .{ .role = .ios, .accepts = .Water },
+                        .Storage = .{ .accepted_items = .{ .Water = true } },
+                        .Ios = .{ .item_type = .Water },
                     },
                     .gizmos = .{
                         .Text = .{ .text = "IOS", .size = 10, .y = 20, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
@@ -31,7 +33,8 @@
                             .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
                             .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
                         },
-                        .Storage = .{ .role = .eos, .accepts = .Water },
+                        .Storage = .{ .accepted_items = .{ .Water = true } },
+                        .Eos = .{ .item_type = .Water },
                     },
                     .gizmos = .{
                         .Text = .{ .text = "EOS1", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
@@ -45,7 +48,8 @@
                             .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
                             .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
                         },
-                        .Storage = .{ .role = .eos, .accepts = .Water },
+                        .Storage = .{ .accepted_items = .{ .Water = true } },
+                        .Eos = .{ .item_type = .Water },
                     },
                     .gizmos = .{
                         .Text = .{ .text = "EOS2", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
@@ -59,7 +63,8 @@
                             .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
                             .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
                         },
-                        .Storage = .{ .role = .eos, .accepts = .Water },
+                        .Storage = .{ .accepted_items = .{ .Water = true } },
+                        .Eos = .{ .item_type = .Water },
                     },
                     .gizmos = .{
                         .Text = .{ .text = "EOS3", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
@@ -73,7 +78,8 @@
                             .shape = .{ .rectangle = .{ .width = 30, .height = 30, .fill = .outline } },
                             .color = .{ .r = 80, .g = 120, .b = 200, .a = 255 },
                         },
-                        .Storage = .{ .role = .eos, .accepts = .Water },
+                        .Storage = .{ .accepted_items = .{ .Water = true } },
+                        .Eos = .{ .item_type = .Water },
                     },
                     .gizmos = .{
                         .Text = .{ .text = "EOS4", .size = 10, .y = 25, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },

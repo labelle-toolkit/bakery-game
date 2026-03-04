@@ -1,72 +1,46 @@
 // Work processor script
 //
-// Ticks work progress for workers at workstations and
-// calls workCompleted when processing is done.
+// Ticks WorkProgress timers on workers. When work completes,
+// removes WorkProgress component. In the future, TaskCompletionSystem
+// will handle the state transition.
 
 const std = @import("std");
-const log = std.log.scoped(.work_processor);
 const engine = @import("labelle-engine");
-const main = @import("../main.zig");
 const work_progress = @import("../components/work_progress.zig");
 
 const Game = engine.Game;
 const Scene = engine.Scene;
 const WorkProgress = work_progress.WorkProgress;
-const Context = main.labelle_tasksContext;
 
 pub fn init(game: *Game, scene: *Scene) void {
-    _ = game;
     _ = scene;
-    log.info("Work processor initialized", .{});
+    _ = game;
 }
+
+pub fn deinit() void {}
 
 pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     _ = scene;
 
     const registry = game.getRegistry();
-
-    // Find all workers with WorkProgress component
     var view = registry.view(.{WorkProgress});
     var iter = view.entityIterator();
 
     while (iter.next()) |worker_entity| {
         const progress = view.get(worker_entity);
-        const worker_id = engine.entityToU64(worker_entity);
 
-        // Create updated progress with accumulated time
         var updated_progress = progress.*;
         updated_progress.update(dt);
 
-        // Log progress every second (approximately)
-        const prev_seconds: u32 = @intFromFloat(progress.accumulated);
-        const curr_seconds: u32 = @intFromFloat(updated_progress.accumulated);
-        if (curr_seconds > prev_seconds) {
-            log.info("Work progress: worker={d} {d:.1}s / {d:.1}s", .{
-                worker_id,
-                updated_progress.accumulated,
-                updated_progress.duration,
-            });
-        }
-
-        // Update the component
-        registry.set(worker_entity, updated_progress);
-
-        // Check if work is complete
         if (updated_progress.isComplete()) {
-            log.info("Work complete: worker={d} workstation={d}", .{
+            const worker_id = engine.entityToU64(worker_entity);
+            std.log.info("[WorkProcessor] Worker {d} completed work at workstation {d}", .{
                 worker_id,
                 updated_progress.workstation_id,
             });
-
-            // Notify task engine that work is complete
-            _ = Context.workCompleted(updated_progress.workstation_id);
-
-            // Remove the WorkProgress component
             registry.remove(WorkProgress, worker_entity);
+        } else {
+            registry.set(worker_entity, updated_progress);
         }
     }
-}
-
-pub fn deinit() void {
-    log.info("Work processor deinitialized", .{});
 }

@@ -6,12 +6,17 @@
 
 const std = @import("std");
 const engine = @import("labelle-engine");
+const main = @import("../main.zig");
+
 const Game = engine.Game;
 const Scene = engine.Scene;
+const Position = engine.Position;
+const Worker = main.Worker;
 
 var screenshot_counter: u32 = 0;
 var frame_count: u32 = 0;
 var auto_screenshot_taken: bool = false;
+var follow_baker: bool = true; // Start following baker (no keyboard on mobile)
 var camera_x: f32 = 400.0;
 var camera_y: f32 = 300.0;
 
@@ -37,18 +42,38 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
         auto_screenshot_taken = true;
     }
 
-    // Camera control with WASD / arrow keys (Y-up: W/Up = +Y)
-    if (input.isKeyDown(.w) or input.isKeyDown(.up)) {
-        camera_y += camera_speed * dt;
+    // Tab - Toggle follow mode
+    if (input.isKeyPressed(.tab)) {
+        follow_baker = !follow_baker;
+        std.log.info("[CameraControl] Camera mode: {s}", .{if (follow_baker) "following baker" else "manual control (WASD)"});
     }
-    if (input.isKeyDown(.s) or input.isKeyDown(.down)) {
-        camera_y -= camera_speed * dt;
-    }
-    if (input.isKeyDown(.a) or input.isKeyDown(.left)) {
-        camera_x -= camera_speed * dt;
-    }
-    if (input.isKeyDown(.d) or input.isKeyDown(.right)) {
-        camera_x += camera_speed * dt;
+
+    // Camera control
+    if (follow_baker) {
+        // Follow the baker (entity with Worker component)
+        const registry = game.getRegistry();
+        var view = registry.view(.{ Position, Worker });
+        var iter = view.entityIterator();
+        if (iter.next()) |entity| {
+            const pos = view.get(Position, entity);
+            // Set camera directly to baker position (camera target = center of view)
+            camera_x = pos.x;
+            camera_y = pos.y;
+        }
+    } else {
+        // Manual camera control with WASD
+        if (input.isKeyDown(.w)) {
+            camera_y -= camera_speed * dt;
+        }
+        if (input.isKeyDown(.s)) {
+            camera_y += camera_speed * dt;
+        }
+        if (input.isKeyDown(.a)) {
+            camera_x -= camera_speed * dt;
+        }
+        if (input.isKeyDown(.d)) {
+            camera_x += camera_speed * dt;
+        }
     }
 
     // Apply camera position (transform Y: camera Y=0 is at screen bottom)
