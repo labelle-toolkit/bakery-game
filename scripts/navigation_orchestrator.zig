@@ -54,7 +54,10 @@ pub fn update(game: *Game, scene: *Scene, dt: f32) void {
     var view = registry.view(.{NavigationIntent});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
-        process_list.append(game.allocator, entity) catch continue;
+        process_list.append(game.allocator, entity) catch |err| {
+            log.err("Failed to collect NavigationIntent entity: {}", .{err});
+            break;
+        };
     }
 
     for (process_list.items) |entity| {
@@ -139,13 +142,13 @@ fn handleNavigating(registry: anytype, entity: Entity, entity_id: u64, intent: *
     // Update worker's ClosestMovementNode to reflect new position
     if (intent.target_node != 0xFFFFFFFF) {
         if (pathfinder_bridge.nodePosition(intent.target_node)) |_| {
-            // Find the actual MovementNode entity for this node_id
-            const node_entity_id = findNodeEntity(registry, intent.target_node);
-            registry.set(entity, ClosestMovementNode{
-                .node_entity = node_entity_id,
-                .node_id = intent.target_node,
-                .distance = 0,
-            });
+            if (findNodeEntity(registry, intent.target_node)) |node_entity_id| {
+                registry.set(entity, ClosestMovementNode{
+                    .node_entity = node_entity_id,
+                    .node_id = intent.target_node,
+                    .distance = 0,
+                });
+            }
         }
     }
 
@@ -175,7 +178,7 @@ fn transitionToFallback(registry: anytype, entity: Entity) void {
 // --- Internal helpers ---
 
 /// Find the MovementNode entity for a given node_id.
-fn findNodeEntity(registry: anytype, target_node_id: u32) u64 {
+fn findNodeEntity(registry: anytype, target_node_id: u32) ?u64 {
     var mn_view = registry.view(.{ MovementNode, Position });
     var mn_iter = mn_view.entityIterator();
     while (mn_iter.next()) |node_entity| {
@@ -184,7 +187,7 @@ fn findNodeEntity(registry: anytype, target_node_id: u32) u64 {
             return engine.entityToU64(node_entity);
         }
     }
-    return 0;
+    return null;
 }
 
 // --- Public API (for cancellation by other scripts) ---

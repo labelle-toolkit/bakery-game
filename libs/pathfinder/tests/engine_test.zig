@@ -475,3 +475,78 @@ test "path_invalidated reports correct current_node mid-navigation" {
     try std.testing.expectEqual(@as(?u32, 1), TestHooks.invalidated_current);
     try std.testing.expect(!pf.isNavigating(42));
 }
+
+test "broken path reroutes via alternate route instead of invalidating" {
+    const TestHooks = struct {
+        var invalidated_count: u32 = 0;
+
+        pub fn path_invalidated(payload: anytype) void {
+            _ = payload;
+            invalidated_count += 1;
+        }
+
+        fn reset() void {
+            invalidated_count = 0;
+        }
+    };
+
+    const wide_config = Config{
+        .max_connection_distance = 200.0,
+        .max_stair_distance = 300.0,
+        .axis_tolerance = 1.0,
+    };
+
+    const Pf = PathfinderWith(u64, TestHooks);
+    var pf = Pf.init(std.testing.allocator, wide_config);
+    defer pf.deinit();
+
+    // Diamond graph: two paths from 0 to 3
+    //   0 (150,100)
+    //   |         \  (via stair)
+    //   1 (150,300) - 2 (400,300)   [stair nodes]
+    //   |         /  (via stair)
+    //   3 (150,450)
+    //
+    // But simpler: create a grid where removing middle node still leaves alternate route
+    // A(100,100) -- B(100,200) -- C(100,300)
+    //                              |
+    //               E(200,200) -- D(200,300)  [via stair at y=300 and y=200]
+    //
+    // Actually let's do: two parallel vertical paths connected by stairs
+    // Left:  0(100,100) -- 1(100,200)  [stair at y=200]
+    // Right: 2(200,200) -- 3(200,300)  [stair at y=200]
+    // Stair connects 1↔2 (same Y=200, both stairs, dist=100 < 300)
+    // Path from 0→3: 0→1→2→3
+    // Remove node 1: no alternate route → invalidated
+    //
+    // Better setup: three vertical columns connected by stairs
+    _ = try pf.addNode(.{ .x = 100, .y = 100 }, true); // node 0 (stair)
+    _ = try pf.addNode(.{ .x = 100, .y = 200 }, true); // node 1 (stair)
+    _ = try pf.addNode(.{ .x = 300, .y = 100 }, true); // node 2 (stair)
+    _ = try pf.addNode(.{ .x = 300, .y = 200 }, true); // node 3 (stair)
+
+    // Graph: 0↔1 (vertical, same X=100), 2↔3 (vertical, same X=300)
+    //         0↔2 (stair, same Y=100, dist=200 < 300)
+    //         1↔3 (stair, same Y=200, dist=200 < 300)
+    // So 0→3 can go: 0→1→3 or 0→2→3
+
+    var ctx = MockCtx.init(std.testing.allocator);
+    defer ctx.deinit();
+    try ctx.positions.put(42, .{ .x = 100, .y = 100 });
+
+    // Navigate from 0 to 3 — picks shortest path (likely 0→1→3)
+    const path = try pf.navigate(42, 0, 3, 100.0);
+    try std.testing.expect(path != null);
+    try std.testing.expect(pf.isNavigating(42));
+
+    TestHooks.reset();
+
+    // Remove node 1 — breaks path 0→1→3, but 0→2→3 still exists
+    pf.removeNode(1);
+
+    pf.tick(&ctx, 0.016);
+
+    // Should have rerouted, NOT invalidated
+    try std.testing.expectEqual(@as(u32, 0), TestHooks.invalidated_count);
+    try std.testing.expect(pf.isNavigating(42));
+}

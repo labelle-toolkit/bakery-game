@@ -77,9 +77,7 @@ pub const GameHooks = struct {
         registry.set(worker_entity, PendingArrival{});
 
         // Clear any stale MovementTarget to prevent race with worker_movement
-        if (registry.tryGet(MovementTarget, worker_entity) != null) {
-            registry.remove(MovementTarget, worker_entity);
-        }
+        registry.remove(MovementTarget, worker_entity);
 
         // Set NavigationIntent to route worker to workstation via pathfinder
         registry.set(worker_entity, NavigationIntent{
@@ -507,9 +505,7 @@ pub const GameHooks = struct {
         registry.set(worker_entity, PendingArrival{});
 
         // Clear any stale MovementTarget to prevent race with worker_movement
-        if (registry.tryGet(MovementTarget, worker_entity) != null) {
-            registry.remove(MovementTarget, worker_entity);
-        }
+        registry.remove(MovementTarget, worker_entity);
 
         registry.set(worker_entity, NavigationIntent{
             .target_entity = payload.workstation_id,
