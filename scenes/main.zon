@@ -1,6 +1,8 @@
 .{
     .name = "main",
     .scripts = .{
+        "pathfinder_bridge",
+        "navigation_orchestrator",
         "storage_inspector",
         "worker_movement",
         "work_processor",
@@ -134,5 +136,23 @@
                 .Text = .{ .text = "Bakery - EIS/IIS/IOS/EOS Task Engine", .size = 18, .color = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
             },
         },
+        // --- Navigation waypoints (MovementNode) ---
+        // Nodes with MovementStair connect horizontally (same Y axis).
+        // Nodes without it only connect vertically (same X axis).
+        //
+        // x=150 axis (pantry/flour area)
+        .{ .components = .{ .Position = .{ .x = 150, .y = 150 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 150, .y = 300 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 150, .y = 450 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 150, .y = 550 }, .MovementNode = .{} } },
+        // x=400 axis (central corridor)
+        .{ .components = .{ .Position = .{ .x = 400, .y = 150 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 400, .y = 300 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 400, .y = 450 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 400, .y = 550 }, .MovementNode = .{} } },
+        // x=600 axis (oven/bread area)
+        .{ .components = .{ .Position = .{ .x = 600, .y = 150 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 600, .y = 300 }, .MovementNode = .{}, .MovementStair = .{} } },
+        .{ .components = .{ .Position = .{ .x = 600, .y = 450 }, .MovementNode = .{}, .MovementStair = .{} } },
     },
 }
