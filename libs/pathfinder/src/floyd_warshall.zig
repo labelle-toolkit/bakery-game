@@ -1,84 +1,82 @@
 const std = @import("std");
 const types = @import("types.zig");
 const graph_mod = @import("graph.zig");
+const zig_utils = @import("zig-utils");
 
 const NodeId = types.NodeId;
 const INF = types.INF;
 const Allocator = std.mem.Allocator;
 const Graph = graph_mod.Graph;
 
+/// Scale factor for f32 → u32 distance conversion.
+/// Preserves sub-pixel precision (1 unit = 0.01 pixels).
+const DIST_SCALE: f32 = 100.0;
+const U32_INF: u32 = std.math.maxInt(u32);
+
+/// Optimized FW backend: SIMD + multi-threading via zig-utils.
+const FWOptimized = zig_utils.FloydWarshallOptimized(.{
+    .parallel = true,
+    .simd = true,
+});
+
 pub const FloydWarshall = struct {
-    /// dist[i * n + j] = shortest distance from node i to node j
-    dist: []f32,
-    /// next[i * n + j] = first node on shortest path from i to j
-    next: []?NodeId,
+    inner: FWOptimized,
     node_count: u32,
     allocator: Allocator,
 
     /// Build distance and next-hop matrices from the graph's adjacency.
-    /// O(V³) time, O(V²) space where V = graph.totalSlots().
+    /// Delegates to the SIMD/parallel optimized implementation from zig-utils.
     pub fn build(allocator: Allocator, graph: *const Graph) !FloydWarshall {
         const n = graph.totalSlots();
-        const size = @as(usize, n) * @as(usize, n);
 
-        const dist = try allocator.alloc(f32, size);
-        errdefer allocator.free(dist);
-        const next = try allocator.alloc(?NodeId, size);
+        var inner = FWOptimized.init(allocator);
+        errdefer inner.deinit();
 
-        // Initialize: all distances to INF, all next-hops to null
-        @memset(dist, INF);
-        @memset(next, null);
-
-        // Self-distances are 0
+        // Count non-removed nodes to size the internal matrix
+        var active_count: u32 = 0;
         for (0..n) |i| {
-            dist[i * n + i] = 0;
+            if (!graph.isRemoved(@intCast(i))) active_count += 1;
         }
 
-        // Fill from graph edges
+        inner.resize(active_count);
+        try inner.clean();
+
+        // Pre-register all non-removed nodes so isolated nodes are queryable
         for (0..n) |i| {
-            if (graph.isRemoved(@intCast(i))) continue;
-            for (graph.getEdges(@intCast(i))) |edge| {
+            const nid: u32 = @intCast(i);
+            if (graph.isRemoved(nid)) continue;
+            if (!inner.ids.contains(nid)) {
+                const key = inner.newKey();
+                try inner.ids.put(nid, key);
+                try inner.reverse_ids.put(key, nid);
+            }
+        }
+
+        // Add edges with f32 → u32 conversion
+        for (0..n) |i| {
+            const nid: u32 = @intCast(i);
+            if (graph.isRemoved(nid)) continue;
+            for (graph.getEdges(nid)) |edge| {
                 if (graph.isRemoved(edge.to)) continue;
-                const edge_idx = i * n + @as(usize, edge.to);
-                dist[edge_idx] = edge.cost;
-                next[edge_idx] = edge.to;
+                const w: u32 = @intFromFloat(@round(edge.cost * DIST_SCALE));
+                try inner.addEdgeWithMapping(nid, edge.to, w);
             }
         }
 
-        // Floyd-Warshall triple loop
-        for (0..n) |k| {
-            if (graph.isRemoved(@intCast(k))) continue;
-            for (0..n) |i| {
-                if (graph.isRemoved(@intCast(i))) continue;
-                const ik = dist[i * n + k];
-                if (ik == INF) continue;
-                for (0..n) |j| {
-                    if (graph.isRemoved(@intCast(j))) continue;
-                    const kj = dist[k * n + j];
-                    if (kj == INF) continue;
-                    const new_dist = ik + kj;
-                    if (new_dist < dist[i * n + j]) {
-                        dist[i * n + j] = new_dist;
-                        next[i * n + j] = next[i * n + k];
-                    }
-                }
-            }
-        }
+        inner.generate();
 
         return .{
-            .dist = dist,
-            .next = next,
+            .inner = inner,
             .node_count = n,
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *FloydWarshall) void {
-        self.allocator.free(self.dist);
-        self.allocator.free(self.next);
+        self.inner.deinit();
     }
 
-    /// Reconstruct full path from start to goal by following the next-hop matrix.
+    /// Reconstruct full path from start to goal.
     /// Returns null if unreachable. Caller owns the returned slice.
     pub fn getPath(self: *const FloydWarshall, allocator: Allocator, start: NodeId, goal: NodeId) !?[]NodeId {
         // Self-path: just return the node itself
@@ -88,35 +86,32 @@ pub const FloydWarshall = struct {
             return path;
         }
 
-        if (self.next[idx(self, start, goal)] == null) return null;
+        // Check reachability first
+        if (!self.inner.hasPathWithMapping(start, goal)) return null;
 
         var path_list = std.ArrayListUnmanaged(NodeId){};
         errdefer path_list.deinit(allocator);
-        var current = start;
-        try path_list.append(allocator, current);
 
-        while (current != goal) {
-            current = self.next[idx(self, current, goal)] orelse {
-                path_list.deinit(allocator);
-                return null;
-            };
-            try path_list.append(allocator, current);
-        }
+        self.inner.setPathWithMappingUnmanaged(allocator, &path_list, start, goal) catch |err| switch (err) {
+            error.NoPathFound => return null,
+            error.OutOfMemory => return error.OutOfMemory,
+        };
 
         return try path_list.toOwnedSlice(allocator);
     }
 
     /// O(1) — lookup next hop without reconstructing full path.
     pub fn getNextHop(self: *const FloydWarshall, from: NodeId, to: NodeId) ?NodeId {
-        return self.next[idx(self, from, to)];
+        if (!self.inner.hasPathWithMapping(from, to)) return null;
+        const result = self.inner.nextWithMapping(from, to);
+        if (result == U32_INF) return null;
+        return result;
     }
 
-    /// O(1) — precomputed shortest distance.
+    /// O(1) — precomputed shortest distance (converted back to f32).
     pub fn getDistance(self: *const FloydWarshall, from: NodeId, to: NodeId) f32 {
-        return self.dist[idx(self, from, to)];
-    }
-
-    fn idx(self: *const FloydWarshall, i: NodeId, j: NodeId) usize {
-        return @as(usize, i) * @as(usize, self.node_count) + @as(usize, j);
+        const d = self.inner.valueWithMapping(from, to);
+        if (d == U32_INF) return INF;
+        return @as(f32, @floatFromInt(d)) / DIST_SCALE;
     }
 };

@@ -8,6 +8,10 @@ pub fn build(b: *std.Build) void {
     const labelle_core_dep = b.dependency("labelle-core", .{ .target = target, .optimize = optimize });
     const labelle_core_mod = labelle_core_dep.module("labelle-core");
 
+    // zig-utils dependency
+    const zig_utils_dep = b.dependency("zig-utils", .{ .target = target, .optimize = optimize });
+    const zig_utils_mod = zig_utils_dep.module("zig_utils");
+
     // Main module
     const pathfinder_mod = b.addModule("pathfinder", .{
         .root_source_file = b.path("src/root.zig"),
@@ -15,6 +19,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     pathfinder_mod.addImport("labelle-core", labelle_core_mod);
+    pathfinder_mod.addImport("zig-utils", zig_utils_mod);
 
     // Unit tests
     const test_mod = b.createModule(.{

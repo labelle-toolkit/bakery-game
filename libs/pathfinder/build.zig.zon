@@ -8,6 +8,9 @@
             .url = "https://github.com/labelle-toolkit/labelle-core/archive/refs/tags/v0.2.0.tar.gz",
             .hash = "labelle_core-0.2.0-CcnR4HNtAACCCNxF1p5Jg1Ia1Q2aGmEKkB1k2ztrIv8S",
         },
+        .@"zig-utils" = .{
+            .path = "../../../zig-utils",
+        },
     },
     .paths = .{
         "build.zig",
